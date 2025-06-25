@@ -6,10 +6,12 @@ import { DownloadSection } from "@/components/download-section"
 import { ViewToggle } from "@/components/view-toggle"
 import { HeaderNav } from "@/components/header-nav"
 import { Lock } from "lucide-react"
+import { useTheme } from "@/components/theme-provider"
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
   const [authChecked, setAuthChecked] = useState(false)
+  const { theme } = useTheme()
 
   // Check auth status on mount and after any potential session changes
   useEffect(() => {
@@ -92,8 +94,8 @@ export default function Home() {
 
   return (
     <div className="main-container theme-bg">
-      {/* Scattered decorative dots inspired by Death Cab cover */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+      {/* Scattered decorative dots - hidden in memorial theme */}
+      <div className="decorative-dots fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-4 h-4 rounded-full bg-red-400"></div>
         <div className="absolute top-32 right-32 w-3 h-3 rounded-full bg-blue-500"></div>
         <div className="absolute top-64 left-1/4 w-5 h-5 rounded-full bg-green-500"></div>
@@ -111,16 +113,30 @@ export default function Home() {
             <HeaderNav user={user} onAuthChange={handleAuthChange} />
           </div>
           <div className="text-center">
-            <div className="mb-6">
-              <img
-                src="/images/brian-portrait.png"
-                alt="Brian Quain - Cartoon Portrait"
-                className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto shadow-lg border-4 border-white"
-              />
-            </div>
-            <h1 className="text-4xl md:text-6xl font-light text-gray-800 mb-4 tracking-wide">brian quain</h1>
-            <p className="text-lg md:text-xl text-gray-600 mb-8 font-light">you'll never walk alone</p>
-            <div className="w-24 h-px bg-gray-300 mx-auto"></div>
+            {theme === "memorial" ? (
+              // Memorial theme: Use the memorial flyer
+              <div className="mb-6">
+                <img
+                  src="/images/brian-memorial-flyer.jpg"
+                  alt="Brian Quain Memorial"
+                  className="memorial-flyer mx-auto"
+                />
+              </div>
+            ) : (
+              // Other themes: Use the cartoon portrait
+              <>
+                <div className="mb-6">
+                  <img
+                    src="/images/brian-portrait.png"
+                    alt="Brian Quain - Cartoon Portrait"
+                    className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto shadow-lg border-4 border-white"
+                  />
+                </div>
+                <h1 className="text-4xl md:text-6xl font-light text-gray-800 mb-4 tracking-wide">brian quain</h1>
+                <p className="text-lg md:text-xl text-gray-600 mb-8 font-light">you'll never walk alone</p>
+                <div className="w-24 h-px bg-gray-300 mx-auto"></div>
+              </>
+            )}
           </div>
         </div>
       </header>
