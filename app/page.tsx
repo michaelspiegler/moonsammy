@@ -112,32 +112,54 @@ export default function Home() {
             <div></div> {/* Spacer */}
             <HeaderNav user={user} onAuthChange={handleAuthChange} />
           </div>
-          <div className="text-center">
-            {theme === "memorial" ? (
-              // Memorial theme: Use the memorial flyer
+
+          {theme === "memorial" ? (
+            // Memorial theme: Elegant header layout
+            <div className="memorial-header-layout flex items-center justify-center min-h-[400px] px-8">
+              <div className="flex items-center gap-12 max-w-6xl w-full">
+                {/* Left side: Portrait */}
+                <div className="flex-shrink-0">
+                  <img
+                    src="/images/brian-memorial-flyer.jpg"
+                    alt="Brian Quain"
+                    className="w-80 h-80 object-cover object-center rounded-lg shadow-2xl"
+                  />
+                  <div className="text-center mt-4 text-sm text-gray-400 font-light">YOU'LL NEVER WALK ALONE</div>
+                </div>
+
+                {/* Right side: Typography */}
+                <div className="flex-1 text-center">
+                  <h1 className="memorial-title text-8xl font-bold text-yellow-400 mb-6 leading-none">
+                    BRIAN
+                    <br />
+                    QUAIN
+                  </h1>
+                  <div className="text-yellow-400 text-lg mb-8 font-light tracking-wider">
+                    Jan 19th 1975 — June 13th 2025
+                  </div>
+                  <h2 className="text-2xl text-white mb-6 font-light">A Celebration of Life in Photos</h2>
+                  <div className="text-gray-300 text-lg leading-relaxed max-w-md mx-auto">
+                    <p className="mb-4">Share your memories, stories, and photos of Brian</p>
+                    <p>Keep his spirit alive through the moments we shared</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Other themes: Original layout
+            <div className="text-center">
               <div className="mb-6">
                 <img
-                  src="/images/brian-memorial-flyer.jpg"
-                  alt="Brian Quain Memorial"
-                  className="memorial-flyer mx-auto"
+                  src="/images/brian-portrait.png"
+                  alt="Brian Quain - Cartoon Portrait"
+                  className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto shadow-lg border-4 border-white"
                 />
               </div>
-            ) : (
-              // Other themes: Use the cartoon portrait
-              <>
-                <div className="mb-6">
-                  <img
-                    src="/images/brian-portrait.png"
-                    alt="Brian Quain - Cartoon Portrait"
-                    className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto shadow-lg border-4 border-white"
-                  />
-                </div>
-                <h1 className="text-4xl md:text-6xl font-light text-gray-800 mb-4 tracking-wide">brian quain</h1>
-                <p className="text-lg md:text-xl text-gray-600 mb-8 font-light">you'll never walk alone</p>
-                <div className="w-24 h-px bg-gray-300 mx-auto"></div>
-              </>
-            )}
-          </div>
+              <h1 className="text-4xl md:text-6xl font-light text-gray-800 mb-4 tracking-wide">brian quain</h1>
+              <p className="text-lg md:text-xl text-gray-600 mb-8 font-light">you'll never walk alone</p>
+              <div className="w-24 h-px bg-gray-300 mx-auto"></div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -159,11 +181,21 @@ export default function Home() {
             <p className="text-blue-600 text-sm font-light">Create an account or sign in to continue</p>
           </div>
         ) : null}
+
         {/* Upload Section */}
-        <section className="max-w-2xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-light text-gray-700 mb-12 text-center">share a memory</h2>
-          <UploadSection user={user} onAuthChange={handleAuthChange} />
-        </section>
+        {theme !== "memorial" && (
+          <section className="max-w-2xl mx-auto">
+            <h2 className="text-2xl md:text-3xl font-light text-gray-700 mb-12 text-center">share a memory</h2>
+            <UploadSection user={user} onAuthChange={handleAuthChange} />
+          </section>
+        )}
+
+        {/* Memorial theme: Upload section with different styling */}
+        {theme === "memorial" && (
+          <section className="max-w-2xl mx-auto">
+            <UploadSection user={user} onAuthChange={handleAuthChange} />
+          </section>
+        )}
 
         {/* View Toggle and Photos */}
         <section className="max-w-6xl mx-auto">
