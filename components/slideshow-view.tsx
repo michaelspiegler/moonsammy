@@ -65,8 +65,8 @@ export function SlideshowView({ photos }: SlideshowViewProps) {
     transition: "fade",
     shuffle: false,
     showMetadata: true,
-    autoStart: false,
-    pauseOnHover: true,
+    autoStart: true,
+    pauseOnHover: false,
     showProgress: true,
     backgroundBlur: true,
     transitionSpeed: 800,
@@ -269,8 +269,6 @@ export function SlideshowView({ photos }: SlideshowViewProps) {
       className={`relative w-full ${
         isFullscreen ? "fixed inset-0 z-50 bg-black" : "bg-gray-900 rounded-lg overflow-hidden"
       } ${isFullscreen ? "h-screen" : "h-[70vh]"}`}
-      onMouseEnter={() => settings.pauseOnHover && isPlaying && setIsPlaying(false)}
-      onMouseLeave={() => settings.pauseOnHover && setIsPlaying(true)}
     >
       {/* Background Image with Blur */}
       {settings.backgroundBlur && (
