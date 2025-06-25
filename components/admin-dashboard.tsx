@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { AdminPhotoCard } from "./admin-photo-card"
 import { AdminUserManagement } from "./admin-user-management"
+import { AdminLogs } from "./admin-logs"
 import {
   LogOut,
   ImageIcon,
@@ -17,6 +18,7 @@ import {
   AlertCircle,
   RefreshCw,
   Users,
+  FileText,
 } from "lucide-react"
 
 interface Photo {
@@ -64,7 +66,7 @@ export function AdminDashboard() {
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
-  const [activeTab, setActiveTab] = useState<"photos" | "users">("photos")
+  const [activeTab, setActiveTab] = useState<"photos" | "users" | "logs">("photos")
 
   useEffect(() => {
     fetchData()
@@ -156,12 +158,14 @@ export function AdminDashboard() {
   }
 
   const handleDeletePhoto = async (photoId: string) => {
-    if (!confirm("Are you sure you want to delete this photo and all its comments?")) return
+    if (!confirm("Are you sure you want to delete this photo and all its comments, likes, and tags?")) return
 
     try {
       const response = await fetch(`/api/admin/photos/${encodeURIComponent(photoId)}`, {
         method: "DELETE",
       })
+
+      const data = await response.json()
 
       if (response.ok) {
         // Remove from selected photos if it was selected
@@ -169,10 +173,14 @@ export function AdminDashboard() {
         newSelected.delete(photoId)
         setSelectedPhotos(newSelected)
 
+        // Show success message with details
+        alert(
+          `Photo deleted successfully!\n\nDetails:\n- Comments deleted: ${data.details?.comments_deleted || 0}\n- Likes deleted: ${data.details?.likes_deleted || 0}\n- Tags deleted: ${data.details?.tags_deleted || 0}`,
+        )
+
         // Refresh current page
         fetchData()
       } else {
-        const data = await response.json()
         alert(data.error || "Failed to delete photo")
       }
     } catch (error) {
@@ -184,11 +192,21 @@ export function AdminDashboard() {
   const handleBulkDelete = async () => {
     if (selectedPhotos.size === 0) return
 
-    if (!confirm(`Are you sure you want to delete ${selectedPhotos.size} selected photos and all their comments?`))
+    if (
+      !confirm(
+        `Are you sure you want to delete ${selectedPhotos.size} selected photos and all their related data (comments, likes, tags)?`,
+      )
+    )
       return
 
     setBulkDeleting(true)
     const errors = []
+    const totalDeleted = {
+      photos: 0,
+      comments: 0,
+      likes: 0,
+      tags: 0,
+    }
 
     try {
       // Delete photos one by one
@@ -197,7 +215,14 @@ export function AdminDashboard() {
           const response = await fetch(`/api/admin/photos/${encodeURIComponent(photoId)}`, {
             method: "DELETE",
           })
-          if (!response.ok) {
+
+          if (response.ok) {
+            const data = await response.json()
+            totalDeleted.photos++
+            totalDeleted.comments += data.details?.comments_deleted || 0
+            totalDeleted.likes += data.details?.likes_deleted || 0
+            totalDeleted.tags += data.details?.tags_deleted || 0
+          } else {
             errors.push(photoId)
           }
         } catch (error) {
@@ -206,9 +231,13 @@ export function AdminDashboard() {
       }
 
       if (errors.length > 0) {
-        alert(`Failed to delete ${errors.length} photos. Please try again.`)
+        alert(
+          `Bulk deletion completed with some errors:\n\n✅ Successfully deleted: ${totalDeleted.photos} photos\n❌ Failed to delete: ${errors.length} photos\n\nTotal cleanup:\n- Comments: ${totalDeleted.comments}\n- Likes: ${totalDeleted.likes}\n- Tags: ${totalDeleted.tags}`,
+        )
       } else {
-        alert(`Successfully deleted ${selectedPhotos.size} photos.`)
+        alert(
+          `Bulk deletion completed successfully!\n\n✅ Photos deleted: ${totalDeleted.photos}\n✅ Comments deleted: ${totalDeleted.comments}\n✅ Likes deleted: ${totalDeleted.likes}\n✅ Tags deleted: ${totalDeleted.tags}`,
+        )
       }
 
       // Clear selection and refresh
@@ -312,6 +341,15 @@ export function AdminDashboard() {
           <Users className="h-4 w-4 mr-2" />
           User Management
         </Button>
+        <Button
+          onClick={() => setActiveTab("logs")}
+          variant={activeTab === "logs" ? "default" : "ghost"}
+          size="sm"
+          className="font-light"
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          Activity Logs
+        </Button>
       </div>
 
       {/* Error Display */}
@@ -339,6 +377,8 @@ export function AdminDashboard() {
       {/* Tab Content */}
       {activeTab === "users" ? (
         <AdminUserManagement />
+      ) : activeTab === "logs" ? (
+        <AdminLogs />
       ) : (
         <>
           {/* Existing photos management content goes here */}
