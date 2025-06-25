@@ -596,6 +596,7 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
           {selectedPhoto && (
             <PhotoModal
               photo={selectedPhoto}
+              user={localUser}
               onUpdate={(updatedPhoto) => {
                 onPhotoUpdate(updatedPhoto)
                 setSelectedPhoto(updatedPhoto)
