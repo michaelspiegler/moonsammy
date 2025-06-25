@@ -13,13 +13,16 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("default")
+  const [theme, setTheme] = useState<Theme>("memorial")
 
   useEffect(() => {
     // Load theme from localStorage
     const savedTheme = localStorage.getItem("app-theme") as Theme
     if (savedTheme && ["default", "memorial", "indie90s", "punk"].includes(savedTheme)) {
       setTheme(savedTheme)
+    } else {
+      // Default to memorial theme if no saved preference
+      setTheme("memorial")
     }
   }, [])
 
