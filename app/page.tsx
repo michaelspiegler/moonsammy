@@ -5,7 +5,6 @@ import { UploadSection } from "@/components/upload-section"
 import { DownloadSection } from "@/components/download-section"
 import { ViewToggle } from "@/components/view-toggle"
 import { HeaderNav } from "@/components/header-nav"
-import { Lock } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 
 export default function Home() {
@@ -171,14 +170,11 @@ export default function Home() {
             <p className="mt-2 text-gray-500 font-light text-sm">checking authentication...</p>
           </div>
         ) : !user ? (
-          <div className="max-w-2xl mx-auto mb-12 p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
-            <Lock className="mx-auto h-8 w-8 text-blue-600 mb-4" />
-            <h3 className="text-xl font-light text-blue-800 mb-2">Authentication Required</h3>
-            <p className="text-blue-700 mb-4 font-light">
-              The Brian Memorial Gallery requires an account to view and interact with memories. This ensures proper
-              attribution and maintains the integrity of this memorial space.
+          <div className="max-w-2xl mx-auto mb-12 p-6 bg-card border border-border rounded-lg text-center">
+            <h3 className="text-xl font-light text-foreground mb-2">Sign in to continue</h3>
+            <p className="text-muted-foreground mb-4 font-light">
+              All features require an account for security and attribution
             </p>
-            <p className="text-blue-600 text-sm font-light">Create an account or sign in to continue</p>
           </div>
         ) : null}
 
