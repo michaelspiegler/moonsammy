@@ -190,14 +190,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     `
 
-    // Enhanced photo ID finder with comprehensive debugging
+    // Enhanced photo ID finder - FIXED to not use created_at
     const findPhotoId = async (searchId: string) => {
       console.log(`🔍 === PHOTO ID SEARCH DEBUG ===`)
       console.log(`🔍 Original search ID: "${searchId}"`)
       console.log(`🔍 Search ID length: ${searchId.length}`)
 
-      // Get all photos for debugging
-      const allPhotos = await sql`SELECT id FROM photo_uploads ORDER BY created_at DESC LIMIT 20`
+      // Get all photos for debugging - REMOVED ORDER BY created_at
+      const allPhotos = await sql`SELECT id FROM photo_uploads LIMIT 20`
       console.log(`📋 Total photos in database: ${allPhotos.length}`)
       console.log(`📋 Available photo IDs:`)
       allPhotos.forEach((photo, index) => {
