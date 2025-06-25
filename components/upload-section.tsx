@@ -46,6 +46,8 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
   const checkAuthStatus = async () => {
     try {
       const sessionToken = localStorage.getItem("sessionToken")
+      console.log("🔍 Upload Section: Checking auth status, localStorage token:", sessionToken ? "exists" : "missing")
+
       const headers: HeadersInit = {
         "Content-Type": "application/json",
       }
@@ -59,19 +61,27 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
         headers,
       })
       const data = await response.json()
+      console.log("🔍 Upload Section: Auth check response:", data)
+
       if (data.user) {
         setLocalUser(data.user)
         onAuthChange?.(data.user)
+        console.log("🔍 Upload Section: ✅ User authenticated:", data.user.name)
+      } else {
+        console.log("🔍 Upload Section: ❌ No user found in auth response")
       }
     } catch (error) {
-      console.error("Auth check failed:", error)
+      console.error("🔍 Upload Section: ❌ Auth check failed:", error)
     }
   }
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
 
+    console.log("🔍 Upload Section: Starting upload, current user:", localUser?.name || "none")
+
     if (!localUser) {
+      console.log("🔍 Upload Section: No user, showing auth modal")
       setShowAuthModal(true)
       return
     }
@@ -113,8 +123,10 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
         headers["x-session-token"] = sessionToken
       }
 
-      console.log("🔍 Upload: Making request with session token:", sessionToken ? "exists" : "missing")
-      console.log("🔍 Upload: Current user:", localUser.name)
+      console.log("🔍 Upload Section: Making upload request")
+      console.log("  - Session token:", sessionToken ? "exists" : "missing")
+      console.log("  - Current user:", localUser.name)
+      console.log("  - Files count:", files.length)
 
       const response = await fetch("/api/upload", {
         method: "POST",
@@ -123,11 +135,14 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
         body: formData,
       })
 
-      console.log("🔍 Upload: Response status:", response.status)
+      console.log("🔍 Upload Section: Upload response status:", response.status)
 
       // Handle authentication errors
       if (response.status === 401) {
+        console.log("🔍 Upload Section: ❌ Authentication failed, showing login modal")
         setError("Authentication expired. Please sign in again.")
+        setLocalUser(null) // Clear local user state
+        onAuthChange?.(null) // Notify parent
         setShowAuthModal(true)
         setProgress("")
         return
@@ -142,11 +157,17 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
       }
 
       const data = await response.json()
-      console.log("🔍 Upload: Response data:", data)
+      console.log("🔍 Upload Section: Upload response data:", data)
 
       if (response.ok) {
         setResult(data)
         setProgress("")
+
+        // Check auth status after successful upload to ensure we're still logged in
+        setTimeout(() => {
+          console.log("🔍 Upload Section: Checking auth status after upload...")
+          checkAuthStatus()
+        }, 500)
 
         // Instead of auto-refresh, just show success and let user manually refresh
         if (data.successCount > 0) {
@@ -164,7 +185,7 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
         setProgress("")
       }
     } catch (error) {
-      console.error("Upload error:", error)
+      console.error("🔍 Upload Section: ❌ Upload error:", error)
       setError("Upload failed. Please check your connection and try again.")
       setProgress("")
     } finally {
@@ -190,7 +211,7 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
   }
 
   const handleAuthSuccess = async (userData: any) => {
-    console.log("🔍 Upload section: Auth success received:", userData)
+    console.log("🔍 Upload Section: ✅ Auth success received:", userData)
     setLocalUser(userData)
     onAuthChange?.(userData)
     setShowAuthModal(false)
@@ -198,7 +219,7 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
     // Store session token
     if (userData.sessionToken) {
       localStorage.setItem("sessionToken", userData.sessionToken)
-      console.log("🔍 Upload section: Stored session token")
+      console.log("🔍 Upload Section: ✅ Stored session token in localStorage")
     }
   }
 

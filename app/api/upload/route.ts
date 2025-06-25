@@ -10,44 +10,66 @@ async function getCurrentUser(request: NextRequest) {
     return null
   }
 
+  // Get ALL cookies and headers for debugging
+  const allCookies = request.cookies.getAll()
+  const allHeaders = Object.fromEntries(request.headers.entries())
+
+  console.log(
+    "🔍 Upload API: ALL COOKIES:",
+    allCookies.map((c) => `${c.name}=${c.value?.substring(0, 30)}...`),
+  )
+  console.log("🔍 Upload API: RELEVANT HEADERS:", {
+    "x-session-token": allHeaders["x-session-token"]?.substring(0, 30) + "..." || "missing",
+    cookie: allHeaders["cookie"]?.substring(0, 100) + "..." || "missing",
+  })
+
   // Try multiple ways to get session ID with better logging
   const sessionFromCookie = request.cookies.get("session")?.value
   const sessionFromAuthCookie = request.cookies.get("auth-session")?.value
   const sessionFromUserCookie = request.cookies.get("user-session")?.value
   const sessionFromHeader = request.headers.get("x-session-token")
 
+  console.log("🔍 Upload API: Session sources:")
+  console.log("  - session cookie:", sessionFromCookie ? sessionFromCookie.substring(0, 30) + "..." : "❌ MISSING")
   console.log(
-    "🔍 Upload API: All cookies:",
-    Object.fromEntries(request.cookies.getAll().map((c) => [c.name, c.value?.substring(0, 20) + "..."])),
+    "  - auth-session cookie:",
+    sessionFromAuthCookie ? sessionFromAuthCookie.substring(0, 30) + "..." : "❌ MISSING",
   )
   console.log(
-    "🔍 Upload API: Session from 'session' cookie:",
-    sessionFromCookie ? sessionFromCookie.substring(0, 20) + "..." : "missing",
+    "  - user-session cookie:",
+    sessionFromUserCookie ? sessionFromUserCookie.substring(0, 30) + "..." : "❌ MISSING",
   )
   console.log(
-    "🔍 Upload API: Session from 'auth-session' cookie:",
-    sessionFromAuthCookie ? sessionFromAuthCookie.substring(0, 20) + "..." : "missing",
-  )
-  console.log(
-    "🔍 Upload API: Session from 'user-session' cookie:",
-    sessionFromUserCookie ? sessionFromUserCookie.substring(0, 20) + "..." : "missing",
-  )
-  console.log(
-    "🔍 Upload API: Session from header:",
-    sessionFromHeader ? sessionFromHeader.substring(0, 20) + "..." : "missing",
+    "  - x-session-token header:",
+    sessionFromHeader ? sessionFromHeader.substring(0, 30) + "..." : "❌ MISSING",
   )
 
   const sessionId = sessionFromCookie || sessionFromAuthCookie || sessionFromUserCookie || sessionFromHeader
 
   if (!sessionId) {
-    console.log("🔍 Upload API: No session found anywhere")
+    console.log("🔍 Upload API: ❌ NO SESSION FOUND ANYWHERE")
     return null
   }
 
-  console.log("🔍 Upload API: Using session ID:", sessionId.substring(0, 20) + "...")
+  console.log("🔍 Upload API: ✅ Using session ID:", sessionId.substring(0, 30) + "...")
 
   try {
     const sql = neon(process.env.DATABASE_URL)
+
+    // First, let's see what sessions exist in the database
+    const allSessions = await sql`
+      SELECT s.id, s.user_id, u.name, s.expires_at, s.created_at
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      ORDER BY s.created_at DESC
+      LIMIT 10
+    `
+
+    console.log("🔍 Upload API: Recent sessions in database:")
+    allSessions.forEach((session) => {
+      console.log(`  - ${session.id.substring(0, 30)}... | ${session.name} | expires: ${session.expires_at}`)
+    })
+
     const sessions = await sql`
       SELECT u.id, u.name, u.email, u.profile_image_url, s.expires_at
       FROM user_sessions s
@@ -55,10 +77,10 @@ async function getCurrentUser(request: NextRequest) {
       WHERE s.id = ${sessionId}
     `
 
-    console.log("🔍 Upload API: Found sessions in database:", sessions.length)
+    console.log("🔍 Upload API: Found matching sessions:", sessions.length)
 
     if (sessions.length === 0) {
-      console.log("🔍 Upload API: Session not found in database")
+      console.log("🔍 Upload API: ❌ Session not found in database")
       return null
     }
 
@@ -66,30 +88,29 @@ async function getCurrentUser(request: NextRequest) {
     const now = new Date()
     const expiresAt = new Date(session.expires_at)
 
-    console.log("🔍 Upload API: Session expires at:", expiresAt.toISOString())
-    console.log("🔍 Upload API: Current time:", now.toISOString())
-    console.log(
-      "🔍 Upload API: Time until expiry:",
-      Math.round((expiresAt.getTime() - now.getTime()) / 1000 / 60),
-      "minutes",
-    )
+    console.log("🔍 Upload API: Session validation:")
+    console.log("  - expires at:", expiresAt.toISOString())
+    console.log("  - current time:", now.toISOString())
+    console.log("  - minutes until expiry:", Math.round((expiresAt.getTime() - now.getTime()) / 1000 / 60))
 
     if (expiresAt <= now) {
-      console.log("🔍 Upload API: Session expired")
+      console.log("🔍 Upload API: ❌ Session expired, cleaning up")
       await sql`DELETE FROM user_sessions WHERE id = ${sessionId}`
       return null
     }
 
-    console.log("🔍 Upload API: Valid user found:", session.name, "ID:", session.id)
+    console.log("🔍 Upload API: ✅ Valid user found:", session.name, "ID:", session.id)
     return session
   } catch (error) {
-    console.error("🔍 Upload API: Database error:", error)
+    console.error("🔍 Upload API: ❌ Database error:", error)
     return null
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("🔍 Upload API: ========== UPLOAD REQUEST START ==========")
+
     // Check if Blob token is configured
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       return NextResponse.json(
@@ -103,7 +124,7 @@ export async function POST(request: NextRequest) {
     // Get current user - REQUIRED for upload
     const currentUser = await getCurrentUser(request)
     if (!currentUser) {
-      console.log("🔍 Upload API: Authentication failed - no current user")
+      console.log("🔍 Upload API: ❌ Authentication failed - no current user")
       return NextResponse.json({ error: "Authentication required. Please sign in to upload photos." }, { status: 401 })
     }
 
@@ -116,14 +137,14 @@ export async function POST(request: NextRequest) {
     const userId = currentUser.id
 
     console.log(
-      `🔍 Upload: Authenticated user - Name: ${uploaderName}, ID: ${userId}, Profile: ${uploaderProfileImage ? "has image" : "no image"}`,
+      `🔍 Upload: ✅ Authenticated user - Name: ${uploaderName}, ID: ${userId}, Profile: ${uploaderProfileImage ? "has image" : "no image"}`,
     )
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 })
     }
 
-    console.log(`Starting authenticated upload of ${files.length} files by ${uploaderName} (ID: ${userId})`)
+    console.log(`🔍 Upload: Starting upload of ${files.length} files by ${uploaderName} (ID: ${userId})`)
 
     // Process files one at a time to avoid rate limits
     const results = []
@@ -135,22 +156,20 @@ export async function POST(request: NextRequest) {
       const filename = `${timestamp}-${i.toString().padStart(3, "0")}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`
 
       try {
-        console.log(`🔍 Uploading file ${i + 1}/${files.length}: ${filename} (${file.size} bytes)`)
+        console.log(`🔍 Upload: Processing file ${i + 1}/${files.length}: ${filename} (${file.size} bytes)`)
 
         const blob = await put(filename, file, {
           access: "public",
         })
 
-        console.log(`🔍 Successfully uploaded: ${filename} -> ${blob.url}`)
+        console.log(`🔍 Upload: ✅ Successfully uploaded: ${filename} -> ${blob.url}`)
 
         // Save photo metadata to database
         if (process.env.DATABASE_URL) {
           try {
             const sql = neon(process.env.DATABASE_URL)
 
-            console.log(
-              `🔍 Saving upload metadata: name=${uploaderName}, profileImage=${uploaderProfileImage}, userId=${userId}, blobId=${blob.pathname}`,
-            )
+            console.log(`🔍 Upload: Saving metadata: name=${uploaderName}, userId=${userId}, blobId=${blob.pathname}`)
 
             // Insert into photo_uploads table with correct data
             await sql`
@@ -165,11 +184,9 @@ export async function POST(request: NextRequest) {
                 uploaded_at = EXCLUDED.uploaded_at
             `
 
-            console.log(
-              `🔍 Successfully saved upload metadata for ${blob.pathname} by user ${uploaderName} (${userId})`,
-            )
+            console.log(`🔍 Upload: ✅ Successfully saved metadata for ${blob.pathname}`)
           } catch (dbError) {
-            console.error("🔍 Database save failed:", dbError)
+            console.error("🔍 Upload: ❌ Database save failed:", dbError)
             // Don't fail the upload if database save fails
           }
         }
@@ -178,11 +195,11 @@ export async function POST(request: NextRequest) {
 
         // Add delay between uploads to respect rate limits
         if (i < files.length - 1) {
-          console.log("🔍 Waiting 1 second before next upload...")
+          console.log("🔍 Upload: Waiting 1 second before next upload...")
           await new Promise((resolve) => setTimeout(resolve, 1000))
         }
       } catch (error) {
-        console.error(`Failed to upload ${file.name}:`, error)
+        console.error(`🔍 Upload: ❌ Failed to upload ${file.name}:`, error)
         errors.push({ file: file.name, error: error instanceof Error ? error.message : "Unknown error" })
       }
     }
@@ -190,7 +207,9 @@ export async function POST(request: NextRequest) {
     const successCount = results.length
     const errorCount = errors.length
 
-    console.log(`Upload completed: ${successCount} successful, ${errorCount} failed by ${uploaderName} (${userId})`)
+    console.log(
+      `🔍 Upload: Completed - ${successCount} successful, ${errorCount} failed by ${uploaderName} (${userId})`,
+    )
 
     // Create response that preserves session cookies
     const response = NextResponse.json({
@@ -205,10 +224,10 @@ export async function POST(request: NextRequest) {
           : `Uploaded ${successCount} files successfully. ${errorCount} files failed.`,
     })
 
-    // IMPORTANT: Preserve ALL session cookies in response with consistent options
+    // CRITICAL: Preserve ALL session cookies in response with EXACT same options as login
     const cookieOptions = {
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Keep false for development
       sameSite: "lax" as const,
       path: "/",
       maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -222,15 +241,22 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-session-token")
 
     if (sessionId) {
-      console.log(`🍪 Preserving session cookies: ${sessionId.substring(0, 20)}...`)
+      console.log(`🔍 Upload: 🍪 Setting response cookies with session: ${sessionId.substring(0, 30)}...`)
+      console.log(`🔍 Upload: 🍪 Cookie options:`, cookieOptions)
+
       response.cookies.set("session", sessionId, cookieOptions)
       response.cookies.set("auth-session", sessionId, cookieOptions)
       response.cookies.set("user-session", sessionId, cookieOptions)
+
+      console.log(`🔍 Upload: 🍪 Response cookies set successfully`)
+    } else {
+      console.log(`🔍 Upload: ❌ No session ID found to preserve in response`)
     }
 
+    console.log("🔍 Upload API: ========== UPLOAD REQUEST END ==========")
     return response
   } catch (error) {
-    console.error("Upload error:", error)
+    console.error("🔍 Upload: ❌ Upload error:", error)
 
     return NextResponse.json(
       {
