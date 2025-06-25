@@ -5,7 +5,6 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import {
@@ -24,6 +23,7 @@ import {
   EyeOff,
   Timer,
   Zap,
+  ChevronDown,
 } from "lucide-react"
 
 interface Photo {
@@ -424,19 +424,20 @@ export function SlideshowView({ photos }: SlideshowViewProps) {
               {/* Transition Type */}
               <div className="space-y-2">
                 <Label className="text-white">Transition Effect</Label>
-                <Select value={settings.transition} onValueChange={(value: any) => updateSetting("transition", value)}>
-                  <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="z-[9999]">
-                    <SelectItem value="fade">Fade</SelectItem>
-                    <SelectItem value="slide">Slide</SelectItem>
-                    <SelectItem value="zoom">Zoom</SelectItem>
-                    <SelectItem value="blur">Blur</SelectItem>
-                    <SelectItem value="flip">Flip</SelectItem>
-                    <SelectItem value="kenburns">Ken Burns</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      const options = ["fade", "slide", "zoom", "blur", "flip", "kenburns"]
+                      const currentIndex = options.indexOf(settings.transition)
+                      const nextIndex = (currentIndex + 1) % options.length
+                      updateSetting("transition", options[nextIndex] as any)
+                    }}
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-white/20 bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20 transition-colors"
+                  >
+                    <span className="capitalize">{settings.transition}</span>
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                  </button>
+                </div>
               </div>
 
               {/* Toggle Settings */}
