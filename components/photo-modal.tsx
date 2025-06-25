@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { X, Edit2, MessageCircle, Send, AlertCircle, Database, Download, Calendar, Tag, Plus, User } from "lucide-react"
+import { TagInput } from "./tag-input"
 
 interface Comment {
   id: string
@@ -46,7 +47,6 @@ export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) 
   const [title, setTitle] = useState(photo.title || "")
   const [year, setYear] = useState(photo.year?.toString() || "")
   const [tags, setTags] = useState<PhotoTag[]>(photo.tags || [])
-  const [newTag, setNewTag] = useState("")
   const [isAddingTag, setIsAddingTag] = useState(false)
   const [newComment, setNewComment] = useState("")
   const [isAddingComment, setIsAddingComment] = useState(false)
@@ -146,8 +146,8 @@ export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) 
     }
   }
 
-  const handleAddTag = async () => {
-    if (!newTag.trim()) return
+  const handleAddTag = async (tagName: string) => {
+    if (!tagName.trim()) return
 
     setLoading(true)
     setError(null)
@@ -156,7 +156,7 @@ export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) 
       const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "addTag", tagName: newTag.trim() }),
+        body: JSON.stringify({ action: "addTag", tagName: tagName.trim() }),
       })
 
       const data = await response.json()
@@ -171,7 +171,6 @@ export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) 
           tags: updatedTags,
         }
         onUpdate(updatedPhoto)
-        setNewTag("")
         setIsAddingTag(false)
       } else {
         setError(data.error || "Failed to add tag")
@@ -448,33 +447,15 @@ export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) 
           {/* Add Tag Form */}
           {isAddingTag && (
             <div className="space-y-3 mb-4 p-3 bg-gray-50 rounded">
-              <Input
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                placeholder="Add a tag (e.g. family, friends, work...)"
-                className="font-light"
-                onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+              <TagInput
+                onAddTag={handleAddTag}
+                onCancel={() => {
+                  setIsAddingTag(false)
+                  setError(null)
+                }}
+                loading={loading}
+                placeholder="Search or create a tag..."
               />
-              <div className="flex space-x-2">
-                <Button
-                  onClick={handleAddTag}
-                  disabled={loading || !newTag.trim()}
-                  className="bg-gray-800 hover:bg-gray-700 text-white font-light px-4 py-2"
-                >
-                  {loading ? "Adding..." : "Add Tag"}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setIsAddingTag(false)
-                    setNewTag("")
-                    setError(null)
-                  }}
-                  variant="outline"
-                  className="font-light px-4 py-2"
-                >
-                  Cancel
-                </Button>
-              </div>
             </div>
           )}
 

@@ -9,6 +9,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { PhotoModal } from "./photo-modal"
 import { AuthModal } from "./auth-modal"
 import { PhotoFilter } from "./photo-filter"
+import { TagInput } from "./tag-input"
 
 interface Comment {
   id: string
@@ -53,6 +54,7 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
   const [newComments, setNewComments] = useState<{ [key: string]: string }>({})
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({})
   const [showCommentInput, setShowCommentInput] = useState<{ [key: string]: boolean }>({})
+  const [showTagInput, setShowTagInput] = useState<{ [key: string]: boolean }>({})
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null)
   const [localUser, setLocalUser] = useState<any>(user)
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -140,6 +142,49 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
       ...showCommentInput,
       [photoId]: !showCommentInput[photoId],
     })
+  }
+
+  const handleTagClick = (photoId: string) => {
+    if (!localUser) {
+      setShowAuthModal(true)
+      return
+    }
+
+    setShowTagInput({
+      ...showTagInput,
+      [photoId]: !showTagInput[photoId],
+    })
+  }
+
+  const handleAddTagToPhoto = async (photoId: string, tagName: string) => {
+    setLoading({ ...loading, [photoId]: true })
+
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photoId)}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "addTag", tagName: tagName.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        const photo = filteredPhotos.find((p) => p.id === photoId)
+        if (photo) {
+          const updatedPhoto = {
+            ...photo,
+            tags: [...(photo.tags || []), data.tag],
+          }
+          onPhotoUpdate(updatedPhoto)
+        }
+
+        setShowTagInput({ ...showTagInput, [photoId]: false })
+      }
+    } catch (error) {
+      console.error("Error adding tag:", error)
+    } finally {
+      setLoading({ ...loading, [photoId]: false })
+    }
   }
 
   const handleAddComment = async (photoId: string) => {
@@ -330,7 +375,7 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
     setActiveYears(years)
   }
 
-  const handleTagClick = (tagName: string) => {
+  const handleTagFilterClick = (tagName: string) => {
     if (activeTags.includes(tagName)) {
       const newTags = activeTags.filter((tag) => tag !== tagName)
       setActiveTags(newTags)
@@ -455,6 +500,13 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
                     }`}
                   />
                 </Button>
+                <Button variant="ghost" size="sm" className="p-0" onClick={() => handleTagClick(photo.id)}>
+                  <Tag
+                    className={`h-5 w-5 ${
+                      showTagInput[photo.id] ? "text-green-500" : "text-gray-700 hover:text-green-500"
+                    }`}
+                  />
+                </Button>
               </div>
 
               {photo.likes && photo.likes.length > 0 && (
@@ -479,7 +531,7 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
                     {photo.tags.map((tag) => (
                       <button
                         key={tag.id}
-                        onClick={() => handleTagClick(tag.name)}
+                        onClick={() => handleTagFilterClick(tag.name)}
                         className={`inline-flex items-center px-2 py-1 text-xs rounded-full transition-colors cursor-pointer ${
                           activeTags.includes(tag.name)
                             ? "bg-blue-600 text-white"
@@ -494,6 +546,23 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
                 </div>
               )}
 
+              {/* Tag Input */}
+              {showTagInput[photo.id] && localUser && (
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Tag className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">Add a tag</span>
+                  </div>
+                  <TagInput
+                    onAddTag={(tagName) => handleAddTagToPhoto(photo.id, tagName)}
+                    onCancel={() => setShowTagInput({ ...showTagInput, [photo.id]: false })}
+                    loading={loading[photo.id]}
+                    placeholder="Search or create a tag..."
+                  />
+                </div>
+              )}
+
+              {/* Comment Input */}
               {showCommentInput[photo.id] && localUser && (
                 <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
                   <div className="flex items-center space-x-2 mb-2">
