@@ -10,16 +10,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user: null })
     }
 
-    // Try multiple ways to get session ID
+    // Try multiple ways to get session ID with better logging
     const sessionFromCookie = request.cookies.get("session")?.value
     const sessionFromAuthCookie = request.cookies.get("auth-session")?.value
     const sessionFromUserCookie = request.cookies.get("user-session")?.value
     const sessionFromHeader = request.headers.get("x-session-token")
 
-    console.log("🔍 Auth me: Session from 'session' cookie:", sessionFromCookie ? "exists" : "missing")
-    console.log("🔍 Auth me: Session from 'auth-session' cookie:", sessionFromAuthCookie ? "exists" : "missing")
-    console.log("🔍 Auth me: Session from 'user-session' cookie:", sessionFromUserCookie ? "exists" : "missing")
-    console.log("🔍 Auth me: Session from header:", sessionFromHeader ? "exists" : "missing")
+    console.log(
+      "🔍 Auth me: All cookies:",
+      Object.fromEntries(request.cookies.getAll().map((c) => [c.name, c.value?.substring(0, 20) + "..."])),
+    )
+    console.log(
+      "🔍 Auth me: Session from 'session' cookie:",
+      sessionFromCookie ? sessionFromCookie.substring(0, 20) + "..." : "missing",
+    )
+    console.log(
+      "🔍 Auth me: Session from 'auth-session' cookie:",
+      sessionFromAuthCookie ? sessionFromAuthCookie.substring(0, 20) + "..." : "missing",
+    )
+    console.log(
+      "🔍 Auth me: Session from 'user-session' cookie:",
+      sessionFromUserCookie ? sessionFromUserCookie.substring(0, 20) + "..." : "missing",
+    )
+    console.log(
+      "🔍 Auth me: Session from header:",
+      sessionFromHeader ? sessionFromHeader.substring(0, 20) + "..." : "missing",
+    )
 
     const sessionId = sessionFromCookie || sessionFromAuthCookie || sessionFromUserCookie || sessionFromHeader
 
@@ -34,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     // Get user from session and clean up expired sessions
     const sessions = await sql`
-      SELECT u.id, u.name, u.email, u.profile_image_url, s.expires_at
+      SELECT u.id, u.name, u.email, u.profile_image_url, s.expires_at, s.id as session_id
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.id = ${sessionId}
@@ -53,6 +69,11 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Auth me: Session expires at:", expiresAt.toISOString())
     console.log("🔍 Auth me: Current time:", now.toISOString())
+    console.log(
+      "🔍 Auth me: Time until expiry:",
+      Math.round((expiresAt.getTime() - now.getTime()) / 1000 / 60),
+      "minutes",
+    )
 
     if (expiresAt <= now) {
       console.log("🔍 Auth me: Session expired, cleaning up")
@@ -60,9 +81,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user: null })
     }
 
+    // Extend session if it's close to expiring (less than 1 day left)
+    const timeUntilExpiry = expiresAt.getTime() - now.getTime()
+    const oneDayInMs = 24 * 60 * 60 * 1000
+
+    if (timeUntilExpiry < oneDayInMs) {
+      console.log("🔍 Auth me: Extending session expiry")
+      const newExpiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+      await sql`
+        UPDATE user_sessions 
+        SET expires_at = ${newExpiryDate.toISOString()}
+        WHERE id = ${sessionId}
+      `
+    }
+
     console.log("🔍 Auth me: Valid session found for user:", session.name)
 
-    // Valid session - return user data and preserve cookies
+    // Valid session - return user data and ensure cookies are set
     const userData = {
       user: {
         id: session.id,
@@ -74,7 +109,7 @@ export async function GET(request: NextRequest) {
 
     const response = NextResponse.json(userData)
 
-    // Preserve session cookies in the response
+    // Ensure session cookies are properly set with consistent options
     const cookieOptions = {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
@@ -83,12 +118,12 @@ export async function GET(request: NextRequest) {
       maxAge: 30 * 24 * 60 * 60, // 30 days
     }
 
-    // Set all session cookies to ensure they persist
+    // Set multiple cookie names for redundancy
     response.cookies.set("session", sessionId, cookieOptions)
     response.cookies.set("auth-session", sessionId, cookieOptions)
     response.cookies.set("user-session", sessionId, cookieOptions)
 
-    console.log("🔍 Auth me: Returning user data with preserved cookies")
+    console.log("🔍 Auth me: Returning user data with refreshed cookies")
     return response
   } catch (error) {
     console.error("🔍 Auth me: Error during auth check:", error)
