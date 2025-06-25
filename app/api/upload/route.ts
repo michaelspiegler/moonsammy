@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     console.log(`Starting authenticated upload of ${files.length} files by ${uploaderName}`)
 
     // Smaller batch size to avoid rate limits
-    const batchSize = 3
+    const batchSize = 2 // Reduced from 3 to 2
     const results = []
     const errors = []
 
@@ -115,9 +115,13 @@ export async function POST(request: NextRequest) {
           const filename = `${timestamp}-${globalIndex.toString().padStart(3, "0")}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`
 
           try {
+            console.log(`🔍 Uploading file: ${filename} (${file.size} bytes)`)
+
             const blob = await put(filename, file, {
               access: "public",
             })
+
+            console.log(`🔍 Successfully uploaded: ${filename} -> ${blob.url}`)
 
             // Save photo metadata to database if available
             if (process.env.DATABASE_URL) {
@@ -174,9 +178,14 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             console.error(`Failed to upload ${file.name}:`, error)
 
-            // Handle specific Blob errors
+            // Handle Blob API errors more gracefully
+            let errorMessage = "Unknown error"
+
             if (error instanceof Error) {
-              if (error.message.includes("Too Many Requests") || error.message.includes("rate limit")) {
+              errorMessage = error.message
+
+              // Check for specific Blob API errors
+              if (errorMessage.includes("Too Many Requests") || errorMessage.includes("rate limit")) {
                 return {
                   success: false,
                   error: "Rate limit reached - please wait and try again",
@@ -184,18 +193,43 @@ export async function POST(request: NextRequest) {
                 }
               }
 
-              if (error.message.includes("quota") || error.message.includes("limit exceeded")) {
+              if (errorMessage.includes("quota") || errorMessage.includes("limit exceeded")) {
                 return {
                   success: false,
                   error: "Storage quota exceeded",
                   originalName: file.name,
                 }
               }
+
+              if (errorMessage.includes("Request Entity Too Large")) {
+                return {
+                  success: false,
+                  error: "File too large",
+                  originalName: file.name,
+                }
+              }
+
+              if (errorMessage.includes("Unauthorized") || errorMessage.includes("authentication")) {
+                return {
+                  success: false,
+                  error: "Blob storage authentication failed",
+                  originalName: file.name,
+                }
+              }
+            }
+
+            // Handle non-JSON responses from Blob API
+            if (errorMessage.includes("Unexpected token")) {
+              return {
+                success: false,
+                error: "Blob storage service error - please try again",
+                originalName: file.name,
+              }
             }
 
             return {
               success: false,
-              error: error instanceof Error ? error.message : "Unknown error",
+              error: errorMessage,
               originalName: file.name,
             }
           }
@@ -214,7 +248,8 @@ export async function POST(request: NextRequest) {
 
         // Longer delay between batches to respect rate limits
         if (i + batchSize < files.length) {
-          await new Promise((resolve) => setTimeout(resolve, 500))
+          console.log("🔍 Waiting 1 second between batches...")
+          await new Promise((resolve) => setTimeout(resolve, 1000)) // Increased from 500ms to 1000ms
         }
       } catch (batchError) {
         console.error(`Batch ${batchNumber} failed:`, batchError)
