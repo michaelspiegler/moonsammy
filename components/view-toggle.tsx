@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { PhotoGallery } from "./photo-gallery"
 import { InstagramFeed } from "./instagram-feed"
-import { Grid, List, RefreshCw } from "lucide-react"
+import { Grid, List, RefreshCw, Play } from "lucide-react"
+import { SlideshowView } from "./slideshow-view"
 
 interface Photo {
   id: string
@@ -36,7 +37,7 @@ interface ViewToggleProps {
 }
 
 export function ViewToggle({ user, onUserChange }: ViewToggleProps) {
-  const [view, setView] = useState<"gallery" | "feed">("feed")
+  const [view, setView] = useState<"gallery" | "feed" | "slideshow">("feed")
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -84,7 +85,7 @@ export function ViewToggle({ user, onUserChange }: ViewToggleProps) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl md:text-3xl font-light text-gray-700">
-            {view === "feed" ? "memory feed" : "photo gallery"}
+            {view === "feed" ? "memory feed" : view === "gallery" ? "photo gallery" : "slideshow"}
           </h2>
           <p className="text-gray-500 font-light text-sm mt-1">
             {photos.length} {photos.length === 1 ? "memory" : "memories"} shared
@@ -109,6 +110,15 @@ export function ViewToggle({ user, onUserChange }: ViewToggleProps) {
             <Grid className="h-4 w-4 mr-1" />
             Gallery
           </Button>
+          <Button
+            onClick={() => setView("slideshow")}
+            variant={view === "slideshow" ? "default" : "outline"}
+            size="sm"
+            className="font-light"
+          >
+            <Play className="h-4 w-4 mr-1" />
+            Slideshow
+          </Button>
           <Button onClick={fetchPhotos} variant="ghost" size="sm" className="font-light">
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -124,8 +134,10 @@ export function ViewToggle({ user, onUserChange }: ViewToggleProps) {
             user={user}
             onUserChange={handleUserChangeFromFeed}
           />
-        ) : (
+        ) : view === "gallery" ? (
           <PhotoGallery />
+        ) : (
+          <SlideshowView photos={photos} />
         )}
       </div>
     </div>
