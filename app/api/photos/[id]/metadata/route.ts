@@ -129,7 +129,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const photoId = params.id
     const body = await request.json()
 
-    console.log(`🏷️ Tag operation for photo: ${photoId}`, body)
+    console.log(`🏷️ Tag operation for photo: "${photoId}"`, body)
 
     if (!process.env.DATABASE_URL) {
       return NextResponse.json(
@@ -190,43 +190,86 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     `
 
-    // Helper function to find the correct photo ID
+    // Enhanced photo ID finder with comprehensive debugging
     const findPhotoId = async (searchId: string) => {
-      console.log(`🔍 Searching for photo with ID: ${searchId}`)
+      console.log(`🔍 === PHOTO ID SEARCH DEBUG ===`)
+      console.log(`🔍 Original search ID: "${searchId}"`)
+      console.log(`🔍 Search ID length: ${searchId.length}`)
 
-      // Try exact match first
+      // Get all photos for debugging
+      const allPhotos = await sql`SELECT id FROM photo_uploads ORDER BY created_at DESC LIMIT 20`
+      console.log(`📋 Total photos in database: ${allPhotos.length}`)
+      console.log(`📋 Available photo IDs:`)
+      allPhotos.forEach((photo, index) => {
+        console.log(`   ${index + 1}. "${photo.id}" (length: ${photo.id.length})`)
+      })
+
+      // Strategy 1: Exact match
+      console.log(`🔍 Strategy 1: Exact match for "${searchId}"`)
       let photoExists = await sql`SELECT id FROM photo_uploads WHERE id = ${searchId}`
       if (photoExists.length > 0) {
-        console.log(`✅ Found exact match: ${searchId}`)
-        return searchId
+        console.log(`✅ FOUND: Exact match "${photoExists[0].id}"`)
+        return photoExists[0].id
+      }
+      console.log(`❌ No exact match found`)
+
+      // Strategy 2: Remove URL encoding
+      const decodedId = decodeURIComponent(searchId)
+      if (decodedId !== searchId) {
+        console.log(`🔍 Strategy 2: URL decoded "${decodedId}"`)
+        photoExists = await sql`SELECT id FROM photo_uploads WHERE id = ${decodedId}`
+        if (photoExists.length > 0) {
+          console.log(`✅ FOUND: URL decoded match "${photoExists[0].id}"`)
+          return photoExists[0].id
+        }
+        console.log(`❌ No URL decoded match found`)
       }
 
-      // Try without timestamp prefix (extract filename after last dash)
-      const filenameOnly = searchId.includes("-") ? searchId.split("-").slice(2).join("-") : searchId
-      if (filenameOnly !== searchId) {
-        console.log(`🔍 Trying filename only: ${filenameOnly}`)
+      // Strategy 3: Extract filename (remove timestamp prefix)
+      const parts = searchId.split("-")
+      console.log(`🔍 Strategy 3: Split by dash, parts:`, parts)
+
+      if (parts.length >= 3) {
+        // Remove first two parts (timestamp and counter)
+        const filenameOnly = parts.slice(2).join("-")
+        console.log(`🔍 Extracted filename: "${filenameOnly}"`)
+
         photoExists = await sql`SELECT id FROM photo_uploads WHERE id = ${filenameOnly}`
         if (photoExists.length > 0) {
-          console.log(`✅ Found filename match: ${filenameOnly}`)
-          return filenameOnly
+          console.log(`✅ FOUND: Filename match "${photoExists[0].id}"`)
+          return photoExists[0].id
+        }
+        console.log(`❌ No filename match found`)
+      }
+
+      // Strategy 4: Partial match (contains)
+      console.log(`🔍 Strategy 4: Partial match`)
+      const searchTerms = [
+        searchId,
+        decodedId,
+        parts.length >= 3 ? parts.slice(2).join("-") : null,
+        parts.length >= 2 ? parts.slice(1).join("-") : null,
+      ].filter(Boolean)
+
+      for (const term of searchTerms) {
+        console.log(`🔍 Searching for photos containing: "${term}"`)
+        photoExists = await sql`SELECT id FROM photo_uploads WHERE id LIKE ${`%${term}%`}`
+        if (photoExists.length > 0) {
+          console.log(`✅ FOUND: Partial match "${photoExists[0].id}"`)
+          return photoExists[0].id
         }
       }
 
-      // Try partial match (filename contains the search term)
-      console.log(`🔍 Trying partial match for: ${filenameOnly}`)
-      photoExists = await sql`SELECT id FROM photo_uploads WHERE id LIKE ${`%${filenameOnly}%`}`
-      if (photoExists.length > 0) {
-        console.log(`✅ Found partial match: ${photoExists[0].id}`)
-        return photoExists[0].id
+      // Strategy 5: Reverse search (check if any DB photo contains our search term)
+      console.log(`🔍 Strategy 5: Reverse search`)
+      for (const photo of allPhotos) {
+        if (photo.id.includes(searchId) || searchId.includes(photo.id)) {
+          console.log(`✅ FOUND: Reverse match "${photo.id}"`)
+          return photo.id
+        }
       }
 
-      // List all photos for debugging
-      const allPhotos = await sql`SELECT id FROM photo_uploads LIMIT 10`
-      console.log(
-        `📋 Available photos:`,
-        allPhotos.map((p) => p.id),
-      )
-
+      console.log(`❌ === NO PHOTO FOUND WITH ANY STRATEGY ===`)
       return null
     }
 
@@ -265,14 +308,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       try {
         console.log(`🏷️ Adding tag "${tagName}" to photo "${photoId}"`)
 
-        // Find the correct photo ID
+        // Find the correct photo ID with comprehensive debugging
         const actualPhotoId = await findPhotoId(photoId)
         if (!actualPhotoId) {
-          console.error(`❌ Photo ${photoId} not found in photo_uploads table`)
-          return NextResponse.json({ error: "Photo not found" }, { status: 404 })
+          console.error(`❌ Photo "${photoId}" not found in photo_uploads table after all strategies`)
+          return NextResponse.json(
+            {
+              error: "Photo not found in database. Please check the photo ID format.",
+              searchedId: photoId,
+              availablePhotos: (await sql`SELECT id FROM photo_uploads LIMIT 5`).map((p) => p.id),
+            },
+            { status: 404 },
+          )
         }
 
-        console.log(`✅ Using photo ID: ${actualPhotoId}`)
+        console.log(`✅ Using actual photo ID: "${actualPhotoId}"`)
 
         // Insert tag if it doesn't exist
         await sql`
@@ -295,15 +345,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           ON CONFLICT (photo_id, tag_id) DO NOTHING
         `
 
-        console.log(`✅ Successfully linked photo ${actualPhotoId} to tag ${finalTagId}`)
+        console.log(`✅ Successfully linked photo "${actualPhotoId}" to tag "${finalTagId}"`)
 
         return NextResponse.json({
           success: true,
           tag: { id: finalTagId, name: tagName },
+          actualPhotoId: actualPhotoId,
         })
       } catch (error) {
         console.error("Tag add failed:", error)
-        return NextResponse.json({ error: "Failed to add tag" }, { status: 500 })
+        return NextResponse.json({ error: "Failed to add tag", details: error.message }, { status: 500 })
       }
     }
 
