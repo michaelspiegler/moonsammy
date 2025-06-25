@@ -87,22 +87,22 @@ body {
   [data-theme="memorial"] {
     --background: 0 0% 8%;
     --foreground: 45 100% 85%;
-    --card: 0 0% 12%;
+    --card: 0 0% 13%;
     --card-foreground: 45 100% 85%;
-    --popover: 0 0% 12%;
+    --popover: 0 0% 13%;
     --popover-foreground: 45 100% 85%;
     --primary: 45 93% 58%;
     --primary-foreground: 0 0% 8%;
-    --secondary: 0 0% 15%;
+    --secondary: 0 0% 13%;
     --secondary-foreground: 45 100% 85%;
-    --muted: 0 0% 15%;
+    --muted: 0 0% 13%;
     --muted-foreground: 45 50% 65%;
     --accent: 45 93% 58%;
     --accent-foreground: 0 0% 8%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
     --border: 0 0% 20%;
-    --input: 0 0% 15%;
+    --input: 0 0% 13%;
     --ring: 45 93% 58%;
   }
 
@@ -190,7 +190,7 @@ body {
 }
 
 [data-theme="memorial"] .memorial-header-layout {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  background: #222222;
   border-radius: 12px;
   margin: 2rem 0;
 }
@@ -206,54 +206,98 @@ body {
   display: none;
 }
 
-/* Memorial Theme Button and Card Fixes */
+/* Memorial Theme - Universal Button Styling (Back to Gallery style) */
 [data-theme="memorial"] button,
 [data-theme="memorial"] .btn,
-[data-theme="memorial"] [role="button"] {
-  background-color: transparent !important;
-  color: hsl(var(--foreground)) !important;
-  border: 1px solid hsl(var(--border)) !important;
+[data-theme="memorial"] [role="button"],
+[data-theme="memorial"] .tab-button {
+  background-color: #222222 !important;
+  color: hsl(var(--primary)) !important;
+  border: 1px solid #333333 !important;
   transition: all 0.2s ease !important;
+  font-family: "Georgia", "Times New Roman", serif !important;
 }
 
 [data-theme="memorial"] button:hover,
 [data-theme="memorial"] .btn:hover,
-[data-theme="memorial"] [role="button"]:hover {
+[data-theme="memorial"] [role="button"]:hover,
+[data-theme="memorial"] .tab-button:hover {
   background-color: hsl(var(--primary)) !important;
   color: hsl(var(--primary-foreground)) !important;
   border-color: hsl(var(--primary)) !important;
 }
 
-/* Memorial theme cards */
+/* Memorial theme cards with #222222 background */
 [data-theme="memorial"] .card,
-[data-theme="memorial"] [data-card] {
-  background-color: transparent !important;
-  border: 1px solid hsl(var(--border)) !important;
+[data-theme="memorial"] [data-card],
+[data-theme="memorial"] .bg-white {
+  background-color: #222222 !important;
+  border: 1px solid #333333 !important;
   transition: all 0.2s ease !important;
 }
 
 [data-theme="memorial"] .card:hover,
 [data-theme="memorial"] [data-card]:hover {
-  background-color: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
+  background-color: #2a2a2a !important;
   border-color: hsl(var(--primary)) !important;
 }
 
-/* Fix specific button types */
-[data-theme="memorial"] .back-button,
-[data-theme="memorial"] .slideshow-controls button,
-[data-theme="memorial"] .view-toggle button {
-  background-color: transparent !important;
+/* Memorial theme - Feed/Instagram cards */
+[data-theme="memorial"] .instagram-card,
+[data-theme="memorial"] .photo-card,
+[data-theme="memorial"] .memory-card {
+  background-color: #222222 !important;
+  border: 1px solid #333333 !important;
+}
+
+/* Memorial theme - Tab navigation */
+[data-theme="memorial"] .tab-navigation,
+[data-theme="memorial"] .view-toggle {
+  background-color: #222222 !important;
+  border-radius: 8px !important;
+  padding: 4px !important;
+}
+
+/* Memorial theme - Active tab styling */
+[data-theme="memorial"] .tab-active,
+[data-theme="memorial"] [data-state="active"] {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Memorial theme - Input fields */
+[data-theme="memorial"] input,
+[data-theme="memorial"] textarea,
+[data-theme="memorial"] select {
+  background-color: #222222 !important;
   color: hsl(var(--foreground)) !important;
-  border: 1px solid hsl(var(--border)) !important;
+  border: 1px solid #333333 !important;
 }
 
-[data-theme="memorial"] .back-button:hover,
-[data-theme="memorial"] .slideshow-controls button:hover,
-[data-theme="memorial"] .view-toggle button:hover {
-  background-color: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
+[data-theme="memorial"] input:focus,
+[data-theme="memorial"] textarea:focus,
+[data-theme="memorial"] select:focus {
   border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2) !important;
+}
+
+/* Memorial theme - Upload section */
+[data-theme="memorial"] .upload-area {
+  background-color: #222222 !important;
+  border: 2px dashed #333333 !important;
+}
+
+[data-theme="memorial"] .upload-area:hover {
+  border-color: hsl(var(--primary)) !important;
+  background-color: #2a2a2a !important;
+}
+
+/* Memorial theme - Settings panels */
+[data-theme="memorial"] .settings-panel,
+[data-theme="memorial"] .dropdown-content {
+  background-color: #222222 !important;
+  border: 1px solid #333333 !important;
 }
 
 /* Memorial theme text colors */
@@ -275,6 +319,10 @@ body {
 
 [data-theme="memorial"] .text-gray-500 {
   color: hsl(var(--muted-foreground)) !important;
+}
+
+[data-theme="memorial"] .text-white {
+  color: hsl(var(--foreground)) !important;
 }
 
 /* Other theme styles */
