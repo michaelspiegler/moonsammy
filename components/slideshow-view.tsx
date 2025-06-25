@@ -375,7 +375,7 @@ export function SlideshowView({ photos }: SlideshowViewProps) {
       {/* Settings Panel */}
       {showSettings && (
         <div className="absolute top-4 right-16 w-80">
-          <Card className="bg-black/80 backdrop-blur-sm border-white/20 text-white">
+          <Card className="bg-black/80 backdrop-blur-sm border-white/20 text-white relative z-[9998]">
             <CardContent className="p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-light">Slideshow Settings</h3>
@@ -428,7 +428,7 @@ export function SlideshowView({ photos }: SlideshowViewProps) {
                   <SelectTrigger className="bg-white/10 border-white/20 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[9999]">
                     <SelectItem value="fade">Fade</SelectItem>
                     <SelectItem value="slide">Slide</SelectItem>
                     <SelectItem value="zoom">Zoom</SelectItem>
