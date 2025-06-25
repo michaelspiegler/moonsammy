@@ -67,6 +67,12 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
         setLocalUser(data.user)
         onAuthChange?.(data.user)
         console.log("🔍 Upload Section: ✅ User authenticated:", data.user.name)
+
+        // Update localStorage with fresh session token if provided
+        if (data.user.sessionToken) {
+          localStorage.setItem("sessionToken", data.user.sessionToken)
+          console.log("🔍 Upload Section: ✅ Updated localStorage with fresh session token")
+        }
       } else {
         console.log("🔍 Upload Section: ❌ No user found in auth response")
       }
@@ -124,7 +130,7 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
       }
 
       console.log("🔍 Upload Section: Making upload request")
-      console.log("  - Session token:", sessionToken ? "exists" : "missing")
+      console.log("  - Session token:", sessionToken ? sessionToken.substring(0, 30) + "..." : "missing")
       console.log("  - Current user:", localUser.name)
       console.log("  - Files count:", files.length)
 
@@ -143,6 +149,7 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
         setError("Authentication expired. Please sign in again.")
         setLocalUser(null) // Clear local user state
         onAuthChange?.(null) // Notify parent
+        localStorage.removeItem("sessionToken") // Clear localStorage
         setShowAuthModal(true)
         setProgress("")
         return
@@ -163,11 +170,11 @@ export function UploadSection({ user, onAuthChange }: UploadSectionProps) {
         setResult(data)
         setProgress("")
 
-        // Check auth status after successful upload to ensure we're still logged in
+        // CRITICAL: Check auth status immediately after successful upload
+        console.log("🔍 Upload Section: Upload successful, immediately checking auth status...")
         setTimeout(() => {
-          console.log("🔍 Upload Section: Checking auth status after upload...")
           checkAuthStatus()
-        }, 500)
+        }, 100) // Check almost immediately
 
         // Instead of auto-refresh, just show success and let user manually refresh
         if (data.successCount > 0) {

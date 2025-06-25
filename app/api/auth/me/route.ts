@@ -97,33 +97,40 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Auth me: Valid session found for user:", session.name)
 
-    // Valid session - return user data and ensure cookies are set
+    // Valid session - return user data and FORCE set cookies
     const userData = {
       user: {
         id: session.id,
         name: session.name,
         email: session.email,
         profileImage: session.profile_image_url,
+        sessionToken: sessionId, // Include session token in response
       },
     }
 
     const response = NextResponse.json(userData)
 
-    // Ensure session cookies are properly set with consistent options
+    // FORCE set session cookies with aggressive settings
     const cookieOptions = {
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Keep false for development
       sameSite: "lax" as const,
       path: "/",
       maxAge: 30 * 24 * 60 * 60, // 30 days
     }
 
-    // Set multiple cookie names for redundancy
+    // Set multiple cookie names for redundancy with FORCE
     response.cookies.set("session", sessionId, cookieOptions)
     response.cookies.set("auth-session", sessionId, cookieOptions)
     response.cookies.set("user-session", sessionId, cookieOptions)
 
-    console.log("🔍 Auth me: Returning user data with refreshed cookies")
+    // Also set a backup cookie with different settings
+    response.cookies.set("backup-session", sessionId, {
+      ...cookieOptions,
+      httpOnly: true, // Try httpOnly version too
+    })
+
+    console.log("🔍 Auth me: Returning user data with FORCED cookies")
     return response
   } catch (error) {
     console.error("🔍 Auth me: Error during auth check:", error)

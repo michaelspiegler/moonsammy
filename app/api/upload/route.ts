@@ -27,6 +27,7 @@ async function getCurrentUser(request: NextRequest) {
   const sessionFromCookie = request.cookies.get("session")?.value
   const sessionFromAuthCookie = request.cookies.get("auth-session")?.value
   const sessionFromUserCookie = request.cookies.get("user-session")?.value
+  const sessionFromBackupCookie = request.cookies.get("backup-session")?.value
   const sessionFromHeader = request.headers.get("x-session-token")
 
   console.log("🔍 Upload API: Session sources:")
@@ -40,11 +41,16 @@ async function getCurrentUser(request: NextRequest) {
     sessionFromUserCookie ? sessionFromUserCookie.substring(0, 30) + "..." : "❌ MISSING",
   )
   console.log(
+    "  - backup-session cookie:",
+    sessionFromBackupCookie ? sessionFromBackupCookie.substring(0, 30) + "..." : "❌ MISSING",
+  )
+  console.log(
     "  - x-session-token header:",
     sessionFromHeader ? sessionFromHeader.substring(0, 30) + "..." : "❌ MISSING",
   )
 
-  const sessionId = sessionFromCookie || sessionFromAuthCookie || sessionFromUserCookie || sessionFromHeader
+  const sessionId =
+    sessionFromCookie || sessionFromAuthCookie || sessionFromUserCookie || sessionFromBackupCookie || sessionFromHeader
 
   if (!sessionId) {
     console.log("🔍 Upload API: ❌ NO SESSION FOUND ANYWHERE")
@@ -55,20 +61,6 @@ async function getCurrentUser(request: NextRequest) {
 
   try {
     const sql = neon(process.env.DATABASE_URL)
-
-    // First, let's see what sessions exist in the database
-    const allSessions = await sql`
-      SELECT s.id, s.user_id, u.name, s.expires_at, s.created_at
-      FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      ORDER BY s.created_at DESC
-      LIMIT 10
-    `
-
-    console.log("🔍 Upload API: Recent sessions in database:")
-    allSessions.forEach((session) => {
-      console.log(`  - ${session.id.substring(0, 30)}... | ${session.name} | expires: ${session.expires_at}`)
-    })
 
     const sessions = await sql`
       SELECT u.id, u.name, u.email, u.profile_image_url, s.expires_at
@@ -224,7 +216,7 @@ export async function POST(request: NextRequest) {
           : `Uploaded ${successCount} files successfully. ${errorCount} files failed.`,
     })
 
-    // CRITICAL: Preserve ALL session cookies in response with EXACT same options as login
+    // CRITICAL: FORCE set ALL session cookies in response
     const cookieOptions = {
       httpOnly: false,
       secure: false, // Keep false for development
@@ -238,17 +230,23 @@ export async function POST(request: NextRequest) {
       request.cookies.get("session")?.value ||
       request.cookies.get("auth-session")?.value ||
       request.cookies.get("user-session")?.value ||
+      request.cookies.get("backup-session")?.value ||
       request.headers.get("x-session-token")
 
     if (sessionId) {
-      console.log(`🔍 Upload: 🍪 Setting response cookies with session: ${sessionId.substring(0, 30)}...`)
+      console.log(`🔍 Upload: 🍪 FORCING response cookies with session: ${sessionId.substring(0, 30)}...`)
       console.log(`🔍 Upload: 🍪 Cookie options:`, cookieOptions)
 
+      // Set ALL possible cookie variations
       response.cookies.set("session", sessionId, cookieOptions)
       response.cookies.set("auth-session", sessionId, cookieOptions)
       response.cookies.set("user-session", sessionId, cookieOptions)
+      response.cookies.set("backup-session", sessionId, {
+        ...cookieOptions,
+        httpOnly: true, // Try httpOnly version too
+      })
 
-      console.log(`🔍 Upload: 🍪 Response cookies set successfully`)
+      console.log(`🔍 Upload: 🍪 ALL response cookies FORCED successfully`)
     } else {
       console.log(`🔍 Upload: ❌ No session ID found to preserve in response`)
     }
