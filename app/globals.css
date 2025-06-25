@@ -2,85 +2,102 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+
+  /* Memorial Theme - Elegant dark with gold accents */
+  [data-theme="memorial"] {
+    --background: 222 47% 11%;
+    --foreground: 45 100% 85%;
+    --card: 222 47% 8%;
+    --card-foreground: 45 100% 85%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 45 100% 85%;
+    --primary: 45 93% 58%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 47% 15%;
+    --secondary-foreground: 45 100% 85%;
+    --muted: 222 47% 15%;
+    --muted-foreground: 45 20% 65%;
+    --accent: 45 93% 58%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 47% 20%;
+    --input: 222 47% 15%;
+    --ring: 45 93% 58%;
+  }
+
+  /* 90s Indie Theme - Warm, nostalgic colors */
+  [data-theme="indie90s"] {
+    --background: 39 100% 97%;
+    --foreground: 25 25% 25%;
+    --card: 43 100% 94%;
+    --card-foreground: 25 25% 25%;
+    --popover: 43 100% 94%;
+    --popover-foreground: 25 25% 25%;
+    --primary: 25 95% 53%;
+    --primary-foreground: 39 100% 97%;
+    --secondary: 43 30% 85%;
+    --secondary-foreground: 25 25% 25%;
+    --muted: 43 30% 85%;
+    --muted-foreground: 25 15% 45%;
+    --accent: 33 100% 70%;
+    --accent-foreground: 25 25% 25%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 43 30% 82%;
+    --input: 43 30% 85%;
+    --ring: 25 95% 53%;
+  }
+
+  /* Punk Rock Theme - Bold black and red */
+  [data-theme="punk"] {
+    --background: 0 0% 8%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 0 84% 60%;
+    --primary-foreground: 0 0% 95%;
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 0 84% 60%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 95%;
+    --border: 0 0% 25%;
+    --input: 0 0% 20%;
+    --ring: 0 84% 60%;
   }
 }
 
@@ -93,63 +110,141 @@ body {
   }
 }
 
-/* Ken Burns effect animation */
-@keyframes ken-burns {
+/* Theme-specific custom styles */
+[data-theme="memorial"] {
+  font-family: "Georgia", "Times New Roman", serif;
+}
+
+[data-theme="memorial"] h1,
+[data-theme="memorial"] h2,
+[data-theme="memorial"] h3 {
+  color: hsl(var(--primary));
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="indie90s"] {
+  font-family: "Courier New", monospace;
+}
+
+[data-theme="indie90s"] .photo-card {
+  filter: sepia(20%) saturate(120%);
+  border: 2px solid hsl(var(--accent));
+}
+
+[data-theme="punk"] {
+  font-family: "Impact", "Arial Black", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+[data-theme="punk"] .photo-card {
+  border: 3px solid hsl(var(--primary));
+  box-shadow: 0 0 10px rgba(220, 38, 127, 0.3);
+}
+
+[data-theme="punk"] h1,
+[data-theme="punk"] h2,
+[data-theme="punk"] h3 {
+  text-shadow: 2px 2px 0px hsl(var(--primary));
+}
+
+/* Slideshow transitions */
+.slideshow-fade-enter {
+  opacity: 0;
+}
+.slideshow-fade-enter-active {
+  opacity: 1;
+  transition: opacity var(--transition-duration, 500ms) ease-in-out;
+}
+.slideshow-fade-exit {
+  opacity: 1;
+}
+.slideshow-fade-exit-active {
+  opacity: 0;
+  transition: opacity var(--transition-duration, 500ms) ease-in-out;
+}
+
+.slideshow-slide-enter {
+  transform: translateX(100%);
+}
+.slideshow-slide-enter-active {
+  transform: translateX(0%);
+  transition: transform var(--transition-duration, 500ms) ease-in-out;
+}
+.slideshow-slide-exit {
+  transform: translateX(0%);
+}
+.slideshow-slide-exit-active {
+  transform: translateX(-100%);
+  transition: transform var(--transition-duration, 500ms) ease-in-out;
+}
+
+.slideshow-zoom-enter {
+  transform: scale(0.8);
+  opacity: 0;
+}
+.slideshow-zoom-enter-active {
+  transform: scale(1);
+  opacity: 1;
+  transition: all var(--transition-duration, 500ms) ease-in-out;
+}
+.slideshow-zoom-exit {
+  transform: scale(1);
+  opacity: 1;
+}
+.slideshow-zoom-exit-active {
+  transform: scale(1.2);
+  opacity: 0;
+  transition: all var(--transition-duration, 500ms) ease-in-out;
+}
+
+.slideshow-blur-enter {
+  filter: blur(10px);
+  opacity: 0;
+}
+.slideshow-blur-enter-active {
+  filter: blur(0px);
+  opacity: 1;
+  transition: all var(--transition-duration, 500ms) ease-in-out;
+}
+.slideshow-blur-exit {
+  filter: blur(0px);
+  opacity: 1;
+}
+.slideshow-blur-exit-active {
+  filter: blur(10px);
+  opacity: 0;
+  transition: all var(--transition-duration, 500ms) ease-in-out;
+}
+
+.slideshow-flip-enter {
+  transform: rotateY(-90deg);
+  opacity: 0;
+}
+.slideshow-flip-enter-active {
+  transform: rotateY(0deg);
+  opacity: 1;
+  transition: all var(--transition-duration, 500ms) ease-in-out;
+}
+.slideshow-flip-exit {
+  transform: rotateY(0deg);
+  opacity: 1;
+}
+.slideshow-flip-exit-active {
+  transform: rotateY(90deg);
+  opacity: 0;
+  transition: all var(--transition-duration, 500ms) ease-in-out;
+}
+
+.ken-burns {
+  animation: kenBurns var(--slide-duration, 5s) ease-in-out infinite alternate;
+}
+
+@keyframes kenBurns {
   0% {
     transform: scale(1) translate(0, 0);
   }
-  25% {
-    transform: scale(1.1) translate(-2%, -1%);
-  }
-  50% {
-    transform: scale(1.05) translate(1%, -2%);
-  }
-  75% {
-    transform: scale(1.08) translate(-1%, 1%);
-  }
   100% {
-    transform: scale(1.02) translate(0.5%, -0.5%);
+    transform: scale(1.1) translate(-2%, -2%);
   }
-}
-
-.animate-ken-burns {
-  animation: ken-burns 20s ease-in-out infinite;
-}
-
-/* Custom transition utilities */
-.duration-200 {
-  transition-duration: 200ms;
-}
-.duration-300 {
-  transition-duration: 300ms;
-}
-.duration-400 {
-  transition-duration: 400ms;
-}
-.duration-500 {
-  transition-duration: 500ms;
-}
-.duration-600 {
-  transition-duration: 600ms;
-}
-.duration-700 {
-  transition-duration: 700ms;
-}
-.duration-800 {
-  transition-duration: 800ms;
-}
-.duration-900 {
-  transition-duration: 900ms;
-}
-.duration-1000 {
-  transition-duration: 1000ms;
-}
-.duration-1200 {
-  transition-duration: 1200ms;
-}
-.duration-1500 {
-  transition-duration: 1500ms;
-}
-.duration-2000 {
-  transition-duration: 2000ms;
 }

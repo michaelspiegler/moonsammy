@@ -177,7 +177,7 @@ export function HeaderNav({ user: propUser, onAuthChange }: HeaderNavProps) {
                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                   >
                     <Settings className="mr-2 h-4 w-4" />
-                    Profile Settings
+                    Profile/Settings
                   </button>
 
                   <div className="border-t border-gray-100 my-1" />
