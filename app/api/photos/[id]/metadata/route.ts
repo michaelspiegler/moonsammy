@@ -190,6 +190,46 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     `
 
+    // Helper function to find the correct photo ID
+    const findPhotoId = async (searchId: string) => {
+      console.log(`🔍 Searching for photo with ID: ${searchId}`)
+
+      // Try exact match first
+      let photoExists = await sql`SELECT id FROM photo_uploads WHERE id = ${searchId}`
+      if (photoExists.length > 0) {
+        console.log(`✅ Found exact match: ${searchId}`)
+        return searchId
+      }
+
+      // Try without timestamp prefix (extract filename after last dash)
+      const filenameOnly = searchId.includes("-") ? searchId.split("-").slice(2).join("-") : searchId
+      if (filenameOnly !== searchId) {
+        console.log(`🔍 Trying filename only: ${filenameOnly}`)
+        photoExists = await sql`SELECT id FROM photo_uploads WHERE id = ${filenameOnly}`
+        if (photoExists.length > 0) {
+          console.log(`✅ Found filename match: ${filenameOnly}`)
+          return filenameOnly
+        }
+      }
+
+      // Try partial match (filename contains the search term)
+      console.log(`🔍 Trying partial match for: ${filenameOnly}`)
+      photoExists = await sql`SELECT id FROM photo_uploads WHERE id LIKE ${`%${filenameOnly}%`}`
+      if (photoExists.length > 0) {
+        console.log(`✅ Found partial match: ${photoExists[0].id}`)
+        return photoExists[0].id
+      }
+
+      // List all photos for debugging
+      const allPhotos = await sql`SELECT id FROM photo_uploads LIMIT 10`
+      console.log(
+        `📋 Available photos:`,
+        allPhotos.map((p) => p.id),
+      )
+
+      return null
+    }
+
     if (body.action === "setTitle") {
       try {
         await sql`
@@ -225,14 +265,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       try {
         console.log(`🏷️ Adding tag "${tagName}" to photo "${photoId}"`)
 
-        // First, verify the photo exists in photo_uploads
-        const photoExists = await sql`SELECT id FROM photo_uploads WHERE id = ${photoId}`
-        if (photoExists.length === 0) {
+        // Find the correct photo ID
+        const actualPhotoId = await findPhotoId(photoId)
+        if (!actualPhotoId) {
           console.error(`❌ Photo ${photoId} not found in photo_uploads table`)
           return NextResponse.json({ error: "Photo not found" }, { status: 404 })
         }
 
-        console.log(`✅ Photo ${photoId} exists in photo_uploads`)
+        console.log(`✅ Using photo ID: ${actualPhotoId}`)
 
         // Insert tag if it doesn't exist
         await sql`
@@ -247,15 +287,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
         console.log(`🏷️ Using tag ID: ${finalTagId} for tag: ${tagName}`)
 
-        // Link photo to tag
+        // Link photo to tag using the actual photo ID
         const photoTagId = `pt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         await sql`
           INSERT INTO photo_tags (id, photo_id, tag_id) 
-          VALUES (${photoTagId}, ${photoId}, ${finalTagId})
+          VALUES (${photoTagId}, ${actualPhotoId}, ${finalTagId})
           ON CONFLICT (photo_id, tag_id) DO NOTHING
         `
 
-        console.log(`✅ Successfully linked photo ${photoId} to tag ${finalTagId}`)
+        console.log(`✅ Successfully linked photo ${actualPhotoId} to tag ${finalTagId}`)
 
         return NextResponse.json({
           success: true,
@@ -269,9 +309,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     if (body.action === "removeTag") {
       try {
+        // Find the correct photo ID for removal too
+        const actualPhotoId = await findPhotoId(photoId)
+        if (!actualPhotoId) {
+          console.error(`❌ Photo ${photoId} not found for tag removal`)
+          return NextResponse.json({ error: "Photo not found" }, { status: 404 })
+        }
+
         await sql`
           DELETE FROM photo_tags 
-          WHERE photo_id = ${photoId} AND tag_id = ${body.tagId}
+          WHERE photo_id = ${actualPhotoId} AND tag_id = ${body.tagId}
         `
         return NextResponse.json({ success: true })
       } catch (error) {
