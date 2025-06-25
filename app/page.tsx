@@ -175,12 +175,14 @@ export default function Home() {
             <p className="text-muted-foreground mb-4 font-light">
               All features require an account for security and attribution
             </p>
-            <HeaderNav user={user} onAuthChange={handleAuthChange} showButtonOnly={true} />
+            <div className="flex justify-center">
+              <HeaderNav user={user} onAuthChange={handleAuthChange} showButtonOnly={true} />
+            </div>
           </div>
         ) : null}
 
         {/* Upload Section */}
-        {theme !== "memorial" && (
+        {theme !== "memorial" && user && (
           <section className="max-w-2xl mx-auto">
             <h2 className="text-2xl md:text-3xl font-light text-gray-700 mb-12 text-center">share a memory</h2>
             <UploadSection user={user} onAuthChange={handleAuthChange} />
@@ -188,16 +190,18 @@ export default function Home() {
         )}
 
         {/* Memorial theme: Upload section with different styling */}
-        {theme === "memorial" && (
+        {theme === "memorial" && user && (
           <section className="max-w-2xl mx-auto">
             <UploadSection user={user} onAuthChange={handleAuthChange} />
           </section>
         )}
 
-        {/* View Toggle and Photos */}
-        <section className="max-w-6xl mx-auto">
-          {authChecked && <ViewToggle user={user} onUserChange={handleUserChange} />}
-        </section>
+        {/* View Toggle and Photos - Only show when authenticated */}
+        {authChecked && user && (
+          <section className="max-w-6xl mx-auto">
+            <ViewToggle user={user} onUserChange={handleUserChange} />
+          </section>
+        )}
 
         {/* Download Section */}
         <DownloadSection />
