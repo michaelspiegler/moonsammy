@@ -1,35 +1,99 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const filterTag = searchParams.get("filter")
+
     if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+      return NextResponse.json({
+        tags: [],
+        photos: [],
+        error: "Database not configured",
+      })
     }
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Get all tags that are actually associated with existing photos
-    const tags = await sql`
-      SELECT DISTINCT pt.tag_name, COUNT(*) as photo_count
-      FROM photo_tags pt
-      INNER JOIN photo_metadata pm ON pt.photo_id = pm.id
-      GROUP BY pt.tag_name
-      ORDER BY photo_count DESC, pt.tag_name ASC
+    // Create tables if they don't exist
+    await sql`
+      CREATE TABLE IF NOT EXISTS tags (
+        id TEXT PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
     `
 
-    console.log(`🏷️ Found ${tags.length} active tags`)
+    await sql`
+      CREATE TABLE IF NOT EXISTS photo_tags (
+        id TEXT PRIMARY KEY,
+        photo_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(photo_id, tag_id)
+      )
+    `
 
-    const formattedTags = tags.map((tag) => ({
-      name: tag.tag_name,
-      count: Number(tag.photo_count),
-    }))
+    if (filterTag) {
+      // Get photos with specific tag
+      const photos = await sql`
+        SELECT DISTINCT pu.id, pu.blob_url, pu.original_filename, pu.uploaded_at, 
+               pu.uploader_name, pu.uploader_profile_image,
+               pm.title, pm.year
+        FROM photo_uploads pu
+        INNER JOIN photo_tags pt ON pu.id = pt.photo_id
+        INNER JOIN tags t ON pt.tag_id = t.id
+        INNER JOIN photo_metadata pm ON pu.id = pm.id
+        WHERE t.name = ${filterTag}
+        ORDER BY pu.uploaded_at DESC
+      `
 
-    return NextResponse.json({
-      tags: formattedTags,
-    })
+      const formattedPhotos = photos.map((photo) => ({
+        id: photo.id,
+        url: photo.blob_url,
+        filename: photo.original_filename,
+        uploadedAt: photo.uploaded_at,
+        uploaderName: photo.uploader_name,
+        uploaderProfileImage: photo.uploader_profile_image,
+        title: photo.title || "",
+        year: photo.year,
+      }))
+
+      return NextResponse.json({
+        photos: formattedPhotos,
+        filterTag,
+        totalPhotos: photos.length,
+      })
+    } else {
+      // Get all tags with photo counts - only tags that have photos with existing metadata
+      const tags = await sql`
+        SELECT t.id, t.name, COUNT(DISTINCT pm.id) as photo_count
+        FROM tags t
+        INNER JOIN photo_tags pt ON t.id = pt.tag_id
+        INNER JOIN photo_metadata pm ON pt.photo_id = pm.id
+        GROUP BY t.id, t.name
+        HAVING COUNT(DISTINCT pm.id) > 0
+        ORDER BY COUNT(DISTINCT pm.id) DESC, t.name ASC
+      `
+
+      console.log(`🏷️ Found ${tags.length} active tags with photos`)
+
+      return NextResponse.json({
+        tags: tags.map((tag) => ({
+          id: tag.id,
+          name: tag.name,
+          photoCount: Number(tag.photo_count),
+        })),
+      })
+    }
   } catch (error) {
     console.error("Error fetching tags:", error)
-    return NextResponse.json({ error: "Failed to fetch tags" }, { status: 500 })
+    return NextResponse.json({
+      tags: [],
+      photos: [],
+      error: "Failed to fetch tags",
+      details: error instanceof Error ? error.message : "Unknown error",
+    })
   }
 }
