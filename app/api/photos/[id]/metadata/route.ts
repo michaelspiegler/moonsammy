@@ -129,6 +129,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const photoId = params.id
     const body = await request.json()
 
+    console.log(`🏷️ Tag operation for photo: ${photoId}`, body)
+
     if (!process.env.DATABASE_URL) {
       return NextResponse.json(
         {
@@ -221,6 +223,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const tagId = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
       try {
+        console.log(`🏷️ Adding tag "${tagName}" to photo "${photoId}"`)
+
+        // First, verify the photo exists in photo_uploads
+        const photoExists = await sql`SELECT id FROM photo_uploads WHERE id = ${photoId}`
+        if (photoExists.length === 0) {
+          console.error(`❌ Photo ${photoId} not found in photo_uploads table`)
+          return NextResponse.json({ error: "Photo not found" }, { status: 404 })
+        }
+
+        console.log(`✅ Photo ${photoId} exists in photo_uploads`)
+
         // Insert tag if it doesn't exist
         await sql`
           INSERT INTO tags (id, name) 
@@ -232,6 +245,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const existingTag = await sql`SELECT id FROM tags WHERE name = ${tagName}`
         const finalTagId = existingTag[0]?.id || tagId
 
+        console.log(`🏷️ Using tag ID: ${finalTagId} for tag: ${tagName}`)
+
         // Link photo to tag
         const photoTagId = `pt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         await sql`
@@ -239,6 +254,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           VALUES (${photoTagId}, ${photoId}, ${finalTagId})
           ON CONFLICT (photo_id, tag_id) DO NOTHING
         `
+
+        console.log(`✅ Successfully linked photo ${photoId} to tag ${finalTagId}`)
 
         return NextResponse.json({
           success: true,
