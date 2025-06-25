@@ -1,45 +1,43 @@
 "use client"
 
-import { useState } from "react"
-
-import { Button } from "@/components/ui/button"
-import { AuthModal } from "@/components/auth-modal"
+import type React from "react"
 
 interface HeaderNavProps {
-  user: any
-  onAuthChange: (user: any) => void
   showButtonOnly?: boolean
+  onSuccess?: () => void
 }
 
-export function HeaderNav({ user, onAuthChange, showButtonOnly = false }: HeaderNavProps) {
-  const [showAuthModal, setShowAuthModal] = useState(false)
+const HeaderNav: React.FC<HeaderNavProps> = ({ showButtonOnly = false, onSuccess = () => {} }) => {
+  const handleSuccess = () => {
+    onSuccess?.()
+    // Any other success handling
+  }
 
   if (showButtonOnly) {
-    return (
-      <div className="flex items-center gap-4">
-        {!user && (
-          <Button onClick={() => setShowAuthModal(true)} className="memorial-button">
-            Create Account / Sign In
-          </Button>
-        )}
-        <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onAuthChange={onAuthChange} />
-      </div>
-    )
+    return <button onClick={handleSuccess}>Success Button</button>
   }
 
   return (
-    <div className="flex items-center gap-4">
-      {!user && (
-        <Button onClick={() => setShowAuthModal(true)} className="memorial-button">
-          Create Account / Sign In
-        </Button>
-      )}
-      {user && (
-        <Button onClick={() => onAuthChange(null)} className="memorial-button">
-          Sign Out
-        </Button>
-      )}
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onAuthChange={onAuthChange} />
-    </div>
+    <nav>
+      <ul>
+        <li>
+          <a href="#">Home</a>
+        </li>
+        <li>
+          <a href="#">About</a>
+        </li>
+        <li>
+          <a href="#">Services</a>
+        </li>
+        <li>
+          <a href="#">Contact</a>
+        </li>
+        <li>
+          <button onClick={handleSuccess}>Success Button</button>
+        </li>
+      </ul>
+    </nav>
   )
 }
+
+export default HeaderNav

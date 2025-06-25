@@ -91,6 +91,11 @@ export default function Home() {
     setUser(userData)
   }
 
+  const handleAuthSuccess = (userData: any) => {
+    console.log("🔍 Main page: Auth success callback:", userData?.name || "null")
+    handleAuthChange(userData)
+  }
+
   return (
     <div className="main-container theme-bg">
       {/* Scattered decorative dots - hidden in memorial theme */}
@@ -176,7 +181,12 @@ export default function Home() {
               All features require an account for security and attribution
             </p>
             <div className="flex justify-center">
-              <HeaderNav user={user} onAuthChange={handleAuthChange} showButtonOnly={true} />
+              <HeaderNav
+                user={user}
+                onAuthChange={handleAuthChange}
+                onSuccess={handleAuthSuccess}
+                showButtonOnly={true}
+              />
             </div>
           </div>
         ) : null}
