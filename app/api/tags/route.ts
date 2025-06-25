@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         FROM photo_uploads pu
         INNER JOIN photo_tags pt ON pu.id = pt.photo_id
         INNER JOIN tags t ON pt.tag_id = t.id
-        INNER JOIN photo_metadata pm ON pu.id = pm.id
+        LEFT JOIN photo_metadata pm ON pu.id = pm.id
         WHERE t.name = ${filterTag}
         ORDER BY pu.uploaded_at DESC
       `
@@ -68,13 +68,14 @@ export async function GET(request: NextRequest) {
     } else {
       // Get all tags with photo counts - only tags that have photos with existing metadata
       const tags = await sql`
-        SELECT t.id, t.name, COUNT(DISTINCT pm.id) as photo_count
+        SELECT t.id, t.name, COUNT(DISTINCT pu.id) as photo_count
         FROM tags t
         INNER JOIN photo_tags pt ON t.id = pt.tag_id
-        INNER JOIN photo_metadata pm ON pt.photo_id = pm.id
+        INNER JOIN photo_uploads pu ON pt.photo_id = pu.id
+        LEFT JOIN photo_metadata pm ON pu.id = pm.id
         GROUP BY t.id, t.name
-        HAVING COUNT(DISTINCT pm.id) > 0
-        ORDER BY COUNT(DISTINCT pm.id) DESC, t.name ASC
+        HAVING COUNT(DISTINCT pu.id) > 0
+        ORDER BY COUNT(DISTINCT pu.id) DESC, t.name ASC
       `
 
       console.log(`🏷️ Found ${tags.length} active tags with photos`)
