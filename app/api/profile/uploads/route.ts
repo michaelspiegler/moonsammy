@@ -8,9 +8,10 @@ async function getCurrentUser(request: NextRequest) {
 
   const sessionFromCookie = request.cookies.get("session")?.value
   const sessionFromAuthCookie = request.cookies.get("auth-session")?.value
+  const sessionFromUserCookie = request.cookies.get("user-session")?.value
   const sessionFromHeader = request.headers.get("x-session-token")
 
-  const sessionId = sessionFromCookie || sessionFromAuthCookie || sessionFromHeader
+  const sessionId = sessionFromCookie || sessionFromAuthCookie || sessionFromUserCookie || sessionFromHeader
 
   if (!sessionId) {
     return null
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Get all uploads by this user with metadata
+    // Get all uploads by this user that still exist (JOIN with photo_metadata to ensure photo still exists)
     const uploads = await sql`
       SELECT 
         pu.id,
@@ -70,10 +71,12 @@ export async function GET(request: NextRequest) {
         (SELECT COUNT(*) FROM comments WHERE photo_id = pu.id) as comment_count,
         (SELECT COUNT(*) FROM likes WHERE photo_id = pu.id) as like_count
       FROM photo_uploads pu
-      LEFT JOIN photo_metadata pm ON pu.id = pm.id
+      INNER JOIN photo_metadata pm ON pu.id = pm.id
       WHERE pu.user_id = ${user.id}
       ORDER BY pu.uploaded_at DESC
     `
+
+    console.log(`📸 Found ${uploads.length} active uploads for user ${user.name}`)
 
     const formattedUploads = uploads.map((upload) => ({
       id: upload.id,
