@@ -175,6 +175,7 @@ export default function Home() {
             <p className="text-muted-foreground mb-4 font-light">
               All features require an account for security and attribution
             </p>
+            <HeaderNav user={user} onAuthChange={handleAuthChange} showButtonOnly={true} />
           </div>
         ) : null}
 
