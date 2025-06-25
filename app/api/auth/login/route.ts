@@ -1,78 +1,82 @@
-import { NextResponse } from "next/server"
-import bcrypt from "bcrypt"
-import { db } from "@/lib/db"
-import { sign } from "jsonwebtoken"
+import { type NextRequest, NextResponse } from "next/server"
+import { neon } from "@neondatabase/serverless"
+import bcrypt from "bcryptjs"
 
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json()
-    const { email, password } = body
-
-    if (!email || !password) {
-      return new NextResponse("Missing email or password", { status: 400 })
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
-    const user = await db.user.findUnique({
-      where: {
-        email: email,
-      },
-    })
+    const { email, password } = await request.json()
 
-    if (!user) {
-      return new NextResponse("Incorrect email or password", { status: 400 })
+    if (!email?.trim() || !password) {
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const validPassword = await bcrypt.compare(password, user.hashedPassword)
+    const sql = neon(process.env.DATABASE_URL)
 
-    if (!validPassword) {
-      return new NextResponse("Incorrect email or password", { status: 400 })
+    // Find user
+    const users = await sql`
+      SELECT id, name, email, password_hash, profile_image_url 
+      FROM users 
+      WHERE email = ${email.toLowerCase().trim()}
+    `
+
+    if (users.length === 0) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
     }
 
-    // Generate session ID
-    const sessionId = sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET as string, {
-      expiresIn: "30d",
-    })
+    const user = users[0]
 
-    // After creating the session, make sure to set the cookie properly:
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash)
+    if (!isValidPassword) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+    }
+
+    // Create session
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+
+    await sql`
+      INSERT INTO user_sessions (id, user_id, expires_at, created_at)
+      VALUES (${sessionId}, ${user.id}, ${expiresAt.toISOString()}, NOW())
+    `
+
+    console.log("🍪 Setting session cookie:", sessionId)
+
+    // Create response with user data AND session token
     const response = NextResponse.json({
       success: true,
+      sessionToken: sessionId, // Include session token in response
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         profileImage: user.profile_image_url,
       },
-      sessionToken: sessionId, // Include session token in response
     })
 
-    // Set multiple cookie variations to ensure compatibility
-    response.cookies.set("session", sessionId, {
-      httpOnly: false, // Allow JavaScript access
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+    // Set cookies with more persistent settings
+    const cookieOptions = {
+      httpOnly: false, // Allow JavaScript access for debugging
+      secure: false, // Set to false for development, true for production
+      sameSite: "lax" as const, // More permissive for navigation
       path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-    })
+      maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
+    }
 
-    response.cookies.set("auth-session", sessionId, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-    })
+    // Set multiple cookies for redundancy
+    response.cookies.set("session", sessionId, cookieOptions)
+    response.cookies.set("auth-session", sessionId, cookieOptions)
+    response.cookies.set("user-session", sessionId, cookieOptions)
 
-    response.cookies.set("user-session", sessionId, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-    })
+    console.log("🍪 Set cookies with options:", cookieOptions)
 
     return response
   } catch (error) {
-    console.log("[LOGIN_POST]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("Login error:", error)
+    return NextResponse.json({ error: "Login failed" }, { status: 500 })
   }
 }
