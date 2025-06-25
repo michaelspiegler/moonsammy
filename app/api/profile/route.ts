@@ -59,7 +59,7 @@ async function getCurrentUser(request: NextRequest) {
       return null
     }
 
-    console.log("🔍 Profile API: Valid user found:", session.name)
+    console.log("🔍 Profile API: Valid user found:", session.name, "ID:", session.id)
     return session
   } catch (error) {
     console.error("🔍 Profile API: Database error:", error)
@@ -129,6 +129,8 @@ export async function PUT(request: NextRequest) {
       profileImageUrl = blob.url
     }
 
+    console.log(`🔍 Profile Update: Updating user ${user.id} (${user.name}) with new profile image: ${profileImageUrl}`)
+
     // Update user profile
     await sql`
       UPDATE users 
@@ -138,19 +140,19 @@ export async function PUT(request: NextRequest) {
       WHERE id = ${user.id}
     `
 
-    // NEW: Update all photo uploads with the new profile image
+    // FIXED: Only update photo uploads for THIS specific user
     if (profileImageUrl !== user.profile_image_url) {
-      console.log("🔄 Updating profile image for all user uploads...")
+      console.log(`🔄 Updating profile image for uploads by user ${user.id} only...`)
 
       try {
-        // Update all photo uploads by this user with the new profile image
+        // Update ONLY this user's photo uploads with the new profile image
         const updateResult = await sql`
           UPDATE photo_uploads 
           SET uploader_profile_image = ${profileImageUrl}
           WHERE user_id = ${user.id}
         `
 
-        console.log("✅ Updated profile image for user uploads:", updateResult)
+        console.log(`✅ Updated profile image for ${updateResult.length || 0} uploads by user ${user.id}`)
       } catch (updateError) {
         console.error("❌ Failed to update uploads profile image:", updateError)
         // Don't fail the whole request if this update fails

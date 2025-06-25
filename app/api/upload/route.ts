@@ -59,7 +59,7 @@ async function getCurrentUser(request: NextRequest) {
       return null
     }
 
-    console.log("🔍 Upload API: Valid user found:", session.name)
+    console.log("🔍 Upload API: Valid user found:", session.name, "ID:", session.id)
     return session
   } catch (error) {
     console.error("🔍 Upload API: Database error:", error)
@@ -87,17 +87,24 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData()
     const files = formData.getAll("files") as File[]
-    // Use the authenticated user's name
+
+    // IMPORTANT: Use the authenticated user's actual data
     const uploaderName = currentUser.name
+    const uploaderProfileImage = currentUser.profile_image_url
+    const userId = currentUser.id
+
+    console.log(
+      `🔍 Upload: Authenticated user - Name: ${uploaderName}, ID: ${userId}, Profile: ${uploaderProfileImage ? "has image" : "no image"}`,
+    )
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: "No files provided" }, { status: 400 })
     }
 
-    console.log(`Starting authenticated upload of ${files.length} files by ${uploaderName}`)
+    console.log(`Starting authenticated upload of ${files.length} files by ${uploaderName} (ID: ${userId})`)
 
     // Smaller batch size to avoid rate limits
-    const batchSize = 2 // Reduced from 3 to 2
+    const batchSize = 2
     const results = []
     const errors = []
 
@@ -123,12 +130,12 @@ export async function POST(request: NextRequest) {
 
             console.log(`🔍 Successfully uploaded: ${filename} -> ${blob.url}`)
 
-            // Save photo metadata to database if available
+            // Save photo metadata to database
             if (process.env.DATABASE_URL) {
               try {
                 const sql = neon(process.env.DATABASE_URL)
 
-                // Create photo_uploads table if it doesn't exist with all required columns
+                // Create photo_uploads table if it doesn't exist
                 await sql`
                   CREATE TABLE IF NOT EXISTS photo_uploads (
                     id TEXT PRIMARY KEY,
@@ -149,26 +156,25 @@ export async function POST(request: NextRequest) {
                   console.log("Columns may already exist")
                 }
 
-                const profileImageUrl = currentUser?.profile_image_url || null
-                const userId = currentUser?.id || null
-
                 console.log(
-                  `🔍 Saving upload metadata: name=${uploaderName}, profileImage=${profileImageUrl}, userId=${userId}`,
+                  `🔍 Saving upload metadata: name=${uploaderName}, profileImage=${uploaderProfileImage}, userId=${userId}`,
                 )
 
-                // Save the upload info with profile image
+                // Save the upload info with the CORRECT user data
                 await sql`
                   INSERT INTO photo_uploads (id, uploader_name, uploader_profile_image, user_id, original_filename, blob_url, uploaded_at)
-                  VALUES (${blob.pathname}, ${uploaderName.trim()}, ${profileImageUrl}, ${userId}, ${file.name}, ${blob.url}, NOW())
+                  VALUES (${blob.pathname}, ${uploaderName}, ${uploaderProfileImage}, ${userId}, ${file.name}, ${blob.url}, NOW())
                   ON CONFLICT (id) DO UPDATE SET
-                    uploader_name = ${uploaderName.trim()},
-                    uploader_profile_image = ${profileImageUrl},
+                    uploader_name = ${uploaderName},
+                    uploader_profile_image = ${uploaderProfileImage},
                     user_id = ${userId},
                     original_filename = ${file.name},
                     blob_url = ${blob.url}
                 `
 
-                console.log(`🔍 Successfully saved upload metadata for ${blob.pathname}`)
+                console.log(
+                  `🔍 Successfully saved upload metadata for ${blob.pathname} by user ${uploaderName} (${userId})`,
+                )
               } catch (dbError) {
                 console.error("🔍 Database save failed:", dbError)
               }
@@ -249,7 +255,7 @@ export async function POST(request: NextRequest) {
         // Longer delay between batches to respect rate limits
         if (i + batchSize < files.length) {
           console.log("🔍 Waiting 1 second between batches...")
-          await new Promise((resolve) => setTimeout(resolve, 1000)) // Increased from 500ms to 1000ms
+          await new Promise((resolve) => setTimeout(resolve, 1000))
         }
       } catch (batchError) {
         console.error(`Batch ${batchNumber} failed:`, batchError)
@@ -279,7 +285,7 @@ export async function POST(request: NextRequest) {
     const successCount = results.length
     const errorCount = errors.length
 
-    console.log(`Upload completed: ${successCount} successful, ${errorCount} failed by ${uploaderName}`)
+    console.log(`Upload completed: ${successCount} successful, ${errorCount} failed by ${uploaderName} (${userId})`)
 
     // Create response that preserves session cookies
     const response = NextResponse.json({
