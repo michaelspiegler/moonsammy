@@ -1,170 +1,106 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { UploadSection } from "@/components/upload-section"
-import { DownloadSection } from "@/components/download-section"
-import { ViewToggle } from "@/components/view-toggle"
-import { HeaderNav } from "@/components/header-nav"
-import { Lock } from "lucide-react"
+import Image from "next/image"
 
 export default function Home() {
-  const [user, setUser] = useState<any>(null)
-  const [authChecked, setAuthChecked] = useState(false)
-
-  // Check auth status on mount and after any potential session changes
-  useEffect(() => {
-    const checkInitialAuth = async () => {
-      try {
-        console.log("🔍 Main page: Starting initial auth check...")
-
-        // Get session token from localStorage as backup
-        const sessionToken = localStorage.getItem("sessionToken")
-        console.log("🔍 Main page: Session token from localStorage:", sessionToken ? "exists" : "missing")
-
-        const headers: HeadersInit = {
-          "Content-Type": "application/json",
-        }
-        if (sessionToken) {
-          headers["x-session-token"] = sessionToken
-        }
-
-        const response = await fetch("/api/auth/me", {
-          credentials: "include",
-          cache: "no-store", // Prevent caching
-          headers,
-        })
-
-        console.log("🔍 Main page: Auth response status:", response.status)
-
-        const data = await response.json()
-        console.log("🔍 Main page: Auth response data:", data)
-
-        if (data.user) {
-          console.log("🔍 Main page: Initial auth check found user:", data.user.name)
-          setUser(data.user)
-        } else {
-          console.log("🔍 Main page: Initial auth check: no user found")
-          setUser(null)
-        }
-      } catch (error) {
-        console.error("🔍 Main page: Initial auth check failed:", error)
-        setUser(null)
-      } finally {
-        setAuthChecked(true)
-      }
-    }
-
-    checkInitialAuth()
-
-    // Also check auth when the page becomes visible (handles tab switching)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        console.log("🔍 Main page: Page became visible, rechecking auth...")
-        checkInitialAuth()
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
-  }, [])
-
-  const handleAuthChange = (userData: any) => {
-    console.log("🔍 Main page: Auth change received:", userData?.name || "null")
-    setUser(userData)
-
-    // Store session token if provided
-    if (userData && userData.sessionToken) {
-      localStorage.setItem("sessionToken", userData.sessionToken)
-      console.log("🔍 Main page: Stored session token in localStorage")
-    } else if (!userData) {
-      localStorage.removeItem("sessionToken")
-      console.log("🔍 Main page: Removed session token from localStorage")
-    }
-  }
-
-  const handleUserChange = (userData: any) => {
-    console.log("🔍 Main page: User change from feed:", userData?.name || "null")
-    setUser(userData)
-  }
-
   return (
-    <div className="min-h-screen bg-stone-50">
-      {/* Scattered decorative dots inspired by Death Cab cover */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-4 h-4 rounded-full bg-red-400"></div>
-        <div className="absolute top-32 right-32 w-3 h-3 rounded-full bg-blue-500"></div>
-        <div className="absolute top-64 left-1/4 w-5 h-5 rounded-full bg-green-500"></div>
-        <div className="absolute bottom-40 right-20 w-4 h-4 rounded-full bg-yellow-500"></div>
-        <div className="absolute bottom-32 left-16 w-3 h-3 rounded-full bg-pink-400"></div>
-        <div className="absolute top-1/2 right-1/4 w-4 h-4 rounded-full bg-orange-400"></div>
-        <div className="absolute bottom-64 left-1/3 w-3 h-3 rounded-full bg-purple-400"></div>
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
+        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-100 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
+          Get started by editing&nbsp;
+          <code className="font-mono font-bold">app/page.tsx</code>
+        </p>
+        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
+          <a
+            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
+            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            By <Image src="/vercel.svg" alt="Vercel Logo" className="dark:invert" width={100} height={24} priority />
+          </a>
+        </div>
       </div>
 
-      {/* Header with Navigation */}
-      <header className="relative z-10 pt-8 pb-4">
-        <div className="container mx-auto px-6">
-          <div className="flex items-center justify-between mb-8">
-            <div></div> {/* Spacer */}
-            <HeaderNav user={user} onAuthChange={handleAuthChange} />
-          </div>
-          <div className="text-center">
-            <div className="mb-6">
-              <img
-                src="/images/brian-portrait.png"
-                alt="Brian Quain - Cartoon Portrait"
-                className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto shadow-lg border-4 border-white"
-              />
-            </div>
-            <h1 className="text-4xl md:text-6xl font-light text-gray-800 mb-4 tracking-wide">brian quain</h1>
-            <p className="text-lg md:text-xl text-gray-600 mb-8 font-light">you'll never walk alone</p>
-            <div className="w-24 h-px bg-gray-300 mx-auto"></div>
-          </div>
-        </div>
-      </header>
+      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-900 after:via-[#0141ff] after:blur-2xl after:content-[''] dark:before:bg-gradient-radial dark:before:from-white dark:before:to-transparent dark:after:from-[#0141ff] dark:after:via-[#0141ff] dark:after:opacity-40 before:lg:h-[360px]">
+        <Image
+          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
+          src="/next.svg"
+          alt="Next.js Logo"
+          width={180}
+          height={37}
+          priority
+        />
+      </div>
 
-      {/* Main Content */}
-      <main className="relative z-10 container mx-auto px-6 space-y-20">
-        {!authChecked ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-gray-600"></div>
-            <p className="mt-2 text-gray-500 font-light text-sm">checking authentication...</p>
-          </div>
-        ) : !user ? (
-          <div className="max-w-2xl mx-auto mb-12 p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
-            <Lock className="mx-auto h-8 w-8 text-blue-600 mb-4" />
-            <h3 className="text-xl font-light text-blue-800 mb-2">Authentication Required</h3>
-            <p className="text-blue-700 mb-4 font-light">
-              The Brian Memorial Gallery requires an account to view and interact with memories. This ensures proper
-              attribution and maintains the integrity of this memorial space.
-            </p>
-            <p className="text-blue-600 text-sm font-light">Create an account or sign in to continue</p>
-          </div>
-        ) : null}
-        {/* Upload Section */}
-        <section className="max-w-2xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-light text-gray-700 mb-12 text-center">share a memory</h2>
-          <UploadSection user={user} onAuthChange={handleAuthChange} />
-        </section>
+      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
+        <a
+          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
+          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <h2 className={`mb-3 text-2xl font-semibold`}>
+            Docs{" "}
+            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+              -&gt;
+            </span>
+          </h2>
+          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
+            Find in-depth information about Next.js features and API.
+          </p>
+        </a>
 
-        {/* View Toggle and Photos */}
-        <section className="max-w-6xl mx-auto">
-          {authChecked && <ViewToggle user={user} onUserChange={handleUserChange} />}
-        </section>
+        <a
+          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
+          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <h2 className={`mb-3 text-2xl font-semibold`}>
+            Learn{" "}
+            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+              -&gt;
+            </span>
+          </h2>
+          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
+            Learn about Next.js in an interactive course with&nbsp;quizzes!
+          </p>
+        </a>
 
-        {/* Download Section */}
-        <DownloadSection />
-      </main>
+        <a
+          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
+          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <h2 className={`mb-3 text-2xl font-semibold`}>
+            Templates{" "}
+            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+              -&gt;
+            </span>
+          </h2>
+          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
+            Discover and deploy boilerplate example Next.js&nbsp;projects.
+          </p>
+        </a>
 
-      {/* Footer */}
-      <footer className="relative z-10 mt-24 pb-12">
-        <div className="container mx-auto px-6 text-center">
-          <div className="w-full h-px bg-gray-200 mb-8"></div>
-          <p className="text-gray-500 font-light">in memory of brian quain — forever in our hearts</p>
-        </div>
-      </footer>
-    </div>
+        <a
+          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
+          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <h2 className={`mb-3 text-2xl font-semibold`}>
+            Deploy{" "}
+            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+              -&gt;
+            </span>
+          </h2>
+          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
+            Instantly deploy your Next.js site to a shareable URL with&nbsp;Vercel.
+          </p>
+        </a>
+      </div>
+      <div className="main-container theme-bg">{/* existing content */}</div>
+    </main>
   )
 }
