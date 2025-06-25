@@ -44,7 +44,6 @@ export async function GET(request: NextRequest) {
 
     if (sessions.length === 0) {
       console.log("🔍 Auth me: Session not found in database")
-      // Don't delete cookies here, let them expire naturally
       return NextResponse.json({ user: null })
     }
 
@@ -63,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Auth me: Valid session found for user:", session.name)
 
-    // Valid session - return user data
+    // Valid session - return user data and preserve cookies
     const userData = {
       user: {
         id: session.id,
@@ -73,8 +72,24 @@ export async function GET(request: NextRequest) {
       },
     }
 
-    console.log("🔍 Auth me: Returning user data:", userData)
-    return NextResponse.json(userData)
+    const response = NextResponse.json(userData)
+
+    // Preserve session cookies in the response
+    const cookieOptions = {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    }
+
+    // Set all session cookies to ensure they persist
+    response.cookies.set("session", sessionId, cookieOptions)
+    response.cookies.set("auth-session", sessionId, cookieOptions)
+    response.cookies.set("user-session", sessionId, cookieOptions)
+
+    console.log("🔍 Auth me: Returning user data with preserved cookies")
+    return response
   } catch (error) {
     console.error("🔍 Auth me: Error during auth check:", error)
     return NextResponse.json({ user: null })

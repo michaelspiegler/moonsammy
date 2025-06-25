@@ -135,41 +135,21 @@ export async function POST(request: NextRequest) {
               try {
                 const sql = neon(process.env.DATABASE_URL)
 
-                // Create photo_uploads table if it doesn't exist
-                await sql`
-                  CREATE TABLE IF NOT EXISTS photo_uploads (
-                    id TEXT PRIMARY KEY,
-                    uploader_name TEXT NOT NULL,
-                    uploader_profile_image TEXT,
-                    user_id TEXT,
-                    original_filename TEXT NOT NULL,
-                    blob_url TEXT NOT NULL,
-                    uploaded_at TIMESTAMP DEFAULT NOW()
-                  )
-                `
-
-                // Add missing columns if they don't exist
-                try {
-                  await sql`ALTER TABLE photo_uploads ADD COLUMN IF NOT EXISTS uploader_profile_image TEXT`
-                  await sql`ALTER TABLE photo_uploads ADD COLUMN IF NOT EXISTS user_id TEXT`
-                } catch (alterError) {
-                  console.log("Columns may already exist")
-                }
-
                 console.log(
-                  `🔍 Saving upload metadata: name=${uploaderName}, profileImage=${uploaderProfileImage}, userId=${userId}`,
+                  `🔍 Saving upload metadata: name=${uploaderName}, profileImage=${uploaderProfileImage}, userId=${userId}, blobId=${blob.pathname}`,
                 )
 
-                // Save the upload info with the CORRECT user data
+                // Insert into photo_uploads table with correct data
                 await sql`
                   INSERT INTO photo_uploads (id, uploader_name, uploader_profile_image, user_id, original_filename, blob_url, uploaded_at)
                   VALUES (${blob.pathname}, ${uploaderName}, ${uploaderProfileImage}, ${userId}, ${file.name}, ${blob.url}, NOW())
                   ON CONFLICT (id) DO UPDATE SET
-                    uploader_name = ${uploaderName},
-                    uploader_profile_image = ${uploaderProfileImage},
-                    user_id = ${userId},
-                    original_filename = ${file.name},
-                    blob_url = ${blob.url}
+                    uploader_name = EXCLUDED.uploader_name,
+                    uploader_profile_image = EXCLUDED.uploader_profile_image,
+                    user_id = EXCLUDED.user_id,
+                    original_filename = EXCLUDED.original_filename,
+                    blob_url = EXCLUDED.blob_url,
+                    uploaded_at = EXCLUDED.uploaded_at
                 `
 
                 console.log(
@@ -177,6 +157,7 @@ export async function POST(request: NextRequest) {
                 )
               } catch (dbError) {
                 console.error("🔍 Database save failed:", dbError)
+                // Don't fail the upload if database save fails
               }
             }
 
@@ -260,21 +241,6 @@ export async function POST(request: NextRequest) {
       } catch (batchError) {
         console.error(`Batch ${batchNumber} failed:`, batchError)
 
-        // Check if it's a rate limit error
-        if (
-          batchError instanceof Error &&
-          (batchError.message.includes("Too Many Requests") || batchError.message.includes("rate limit"))
-        ) {
-          return NextResponse.json(
-            {
-              error: "Upload rate limit reached. Please wait a moment and try uploading fewer files.",
-              successCount: results.length,
-              errorCount: files.length - results.length,
-            },
-            { status: 429 },
-          )
-        }
-
         // Add all files in this batch to errors
         batch.forEach((file) => {
           errors.push({ file: file.name, error: "Batch processing failed" })
@@ -300,46 +266,31 @@ export async function POST(request: NextRequest) {
           : `Uploaded ${successCount} files successfully. ${errorCount} files failed.`,
     })
 
-    // Preserve session cookies in response
-    const sessionFromCookie = request.cookies.get("session")?.value
-    const sessionFromAuthCookie = request.cookies.get("auth-session")?.value
+    // IMPORTANT: Preserve ALL session cookies in response
+    const allCookies = [
+      { name: "session", value: request.cookies.get("session")?.value },
+      { name: "auth-session", value: request.cookies.get("auth-session")?.value },
+      { name: "user-session", value: request.cookies.get("user-session")?.value },
+    ]
 
-    if (sessionFromCookie) {
-      response.cookies.set("session", sessionFromCookie, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 30 * 24 * 60 * 60,
-      })
+    const cookieOptions = {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
     }
 
-    if (sessionFromAuthCookie) {
-      response.cookies.set("auth-session", sessionFromAuthCookie, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 30 * 24 * 60 * 60,
-      })
-    }
+    allCookies.forEach(({ name, value }) => {
+      if (value) {
+        console.log(`🍪 Preserving cookie: ${name}`)
+        response.cookies.set(name, value, cookieOptions)
+      }
+    })
 
     return response
   } catch (error) {
     console.error("Upload error:", error)
-
-    // Handle rate limit errors at the top level
-    if (
-      error instanceof Error &&
-      (error.message.includes("Too Many Requests") || error.message.includes("rate limit"))
-    ) {
-      return NextResponse.json(
-        {
-          error: "Upload service temporarily unavailable due to rate limits. Please wait and try again.",
-        },
-        { status: 429 },
-      )
-    }
 
     return NextResponse.json(
       {
