@@ -3,15 +3,53 @@ import { cookies } from "next/headers"
 import { list } from "@vercel/blob"
 import { neon } from "@neondatabase/serverless"
 
-// Check admin authentication
-async function checkAuth() {
-  const cookieStore = await cookies()
-  return cookieStore.get("admin-session")?.value === "authenticated"
+// Check admin role authentication
+async function checkAdminAuth() {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return false
+    }
+
+    const cookieStore = await cookies()
+    const sessionId =
+      cookieStore.get("session")?.value ||
+      cookieStore.get("auth-session")?.value ||
+      cookieStore.get("user-session")?.value
+
+    if (!sessionId) {
+      console.log("🔍 Admin photos API: No session ID found")
+      return false
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
+
+    // Check if user has admin role
+    const sessions = await sql`
+      SELECT u.role, u.name
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = ${sessionId} AND s.expires_at > NOW()
+    `
+
+    if (sessions.length === 0) {
+      console.log("🔍 Admin photos API: No valid session found")
+      return false
+    }
+
+    const isAdmin = sessions[0].role === "Admin"
+    console.log("🔍 Admin photos API: User", sessions[0].name, "role:", sessions[0].role, "isAdmin:", isAdmin)
+
+    return isAdmin
+  } catch (error) {
+    console.error("🔍 Admin photos API: Auth check failed:", error)
+    return false
+  }
 }
 
 export async function GET(request: Request) {
   try {
-    if (!(await checkAuth())) {
+    if (!(await checkAdminAuth())) {
+      console.log("🔍 Admin photos API: Unauthorized access attempt")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

@@ -3,14 +3,41 @@ import { cookies } from "next/headers"
 import { neon } from "@neondatabase/serverless"
 import bcrypt from "bcryptjs"
 
-async function checkAuth() {
-  const cookieStore = await cookies()
-  return cookieStore.get("admin-session")?.value === "authenticated"
+async function checkAdminAuth() {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return false
+    }
+
+    const cookieStore = await cookies()
+    const sessionId =
+      cookieStore.get("session")?.value ||
+      cookieStore.get("auth-session")?.value ||
+      cookieStore.get("user-session")?.value
+
+    if (!sessionId) {
+      return false
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
+
+    const sessions = await sql`
+      SELECT u.role
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = ${sessionId} AND s.expires_at > NOW()
+    `
+
+    return sessions.length > 0 && sessions[0].role === "Admin"
+  } catch (error) {
+    console.error("Admin users auth check failed:", error)
+    return false
+  }
 }
 
 export async function GET(request: Request) {
   try {
-    if (!(await checkAuth())) {
+    if (!(await checkAdminAuth())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -50,6 +77,7 @@ export async function GET(request: Request) {
           u.id, 
           u.name, 
           u.email, 
+          u.role,
           u.profile_image_url,
           u.created_at,
           u.updated_at,
@@ -71,6 +99,7 @@ export async function GET(request: Request) {
           u.id, 
           u.name, 
           u.email, 
+          u.role,
           u.profile_image_url,
           u.created_at,
           u.updated_at,
@@ -89,6 +118,7 @@ export async function GET(request: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         profileImage: user.profile_image_url,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
@@ -120,7 +150,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    if (!(await checkAuth())) {
+    if (!(await checkAdminAuth())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -128,7 +158,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
-    const { name, email, password } = await request.json()
+    const { name, email, password, role = "Member" } = await request.json()
 
     // Validate input
     if (!name?.trim() || name.trim().length < 2) {
@@ -141,6 +171,10 @@ export async function POST(request: Request) {
 
     if (!password || password.length < 6) {
       return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
+    }
+
+    if (!["Member", "Admin"].includes(role)) {
+      return NextResponse.json({ error: "Role must be Member or Admin" }, { status: 400 })
     }
 
     const sql = neon(process.env.DATABASE_URL)
@@ -161,8 +195,8 @@ export async function POST(request: Request) {
     const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     await sql`
-      INSERT INTO users (id, name, email, password_hash, created_at, updated_at)
-      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase().trim()}, ${passwordHash}, NOW(), NOW())
+      INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
+      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase().trim()}, ${passwordHash}, ${role}, NOW(), NOW())
     `
 
     return NextResponse.json({
@@ -171,6 +205,7 @@ export async function POST(request: Request) {
         id: userId,
         name: name.trim(),
         email: email.toLowerCase().trim(),
+        role: role,
         profileImage: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

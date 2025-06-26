@@ -2,14 +2,41 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { neon } from "@neondatabase/serverless"
 
-async function checkAuth() {
-  const cookieStore = await cookies()
-  return cookieStore.get("admin-session")?.value === "authenticated"
+async function checkAdminAuth() {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return false
+    }
+
+    const cookieStore = await cookies()
+    const sessionId =
+      cookieStore.get("session")?.value ||
+      cookieStore.get("auth-session")?.value ||
+      cookieStore.get("user-session")?.value
+
+    if (!sessionId) {
+      return false
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
+
+    const sessions = await sql`
+      SELECT u.role
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = ${sessionId} AND s.expires_at > NOW()
+    `
+
+    return sessions.length > 0 && sessions[0].role === "Admin"
+  } catch (error) {
+    console.error("Admin comments auth check failed:", error)
+    return false
+  }
 }
 
 export async function GET() {
   try {
-    if (!(await checkAuth())) {
+    if (!(await checkAdminAuth())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
