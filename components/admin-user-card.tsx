@@ -1,17 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { User, Mail, Calendar, ImageIcon, MessageCircle, Edit, Trash2, Key, MoreVertical } from "lucide-react"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
+  User,
+  Mail,
+  Calendar,
+  ImageIcon,
+  MessageCircle,
+  Edit,
+  Trash2,
+  Key,
+  MoreVertical,
+  Shield,
+  Database,
+} from "lucide-react"
 
 interface UserType {
   id: string
@@ -32,9 +37,23 @@ interface AdminUserCardProps {
 }
 
 export function AdminUserCard({ user, onEdit, onDelete }: AdminUserCardProps) {
+  const [showDropdown, setShowDropdown] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [resettingPassword, setResettingPassword] = useState(false)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [deletingUploads, setDeletingUploads] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -46,26 +65,34 @@ export function AdminUserCard({ user, onEdit, onDelete }: AdminUserCardProps) {
 
   const handleEdit = () => {
     console.log("Edit clicked for user:", user.name)
-    setDropdownOpen(false)
+    setShowDropdown(false)
     onEdit()
   }
 
-  const handleDelete = async () => {
-    console.log("Delete clicked for user:", user.name)
-    setDropdownOpen(false)
+  const handleDeleteUser = async () => {
+    console.log("Delete user clicked for:", user.name)
+    setShowDropdown(false)
 
-    if (
-      !confirm(
-        `Are you sure you want to delete ${user.name}? This will also delete all their uploads, comments, and sessions. This action cannot be undone.`,
-      )
-    ) {
-      return
-    }
+    const keepPhotos = confirm(
+      `Delete ${user.name}?\n\nClick OK to delete user but KEEP their photos\nClick Cancel to delete user AND all their photos`,
+    )
+
+    const confirmDelete = confirm(
+      `Are you absolutely sure you want to delete ${user.name}?\n\n${
+        keepPhotos
+          ? "Their photos will be kept but marked as 'Anonymous User'"
+          : "This will permanently delete their account AND all their photos"
+      }\n\nThis action cannot be undone.`,
+    )
+
+    if (!confirmDelete) return
 
     setDeleting(true)
     try {
       const response = await fetch(`/api/admin/users/${user.id}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keepPhotos }),
       })
 
       if (response.ok) {
@@ -82,9 +109,43 @@ export function AdminUserCard({ user, onEdit, onDelete }: AdminUserCardProps) {
     }
   }
 
+  const handleDeleteUploads = async () => {
+    console.log("Delete uploads clicked for:", user.name)
+    setShowDropdown(false)
+
+    if (
+      !confirm(
+        `Delete all uploads by ${user.name}?\n\nThis will permanently delete all ${user.uploadCount} photos they uploaded.\n\nThis action cannot be undone.`,
+      )
+    ) {
+      return
+    }
+
+    setDeletingUploads(true)
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}/uploads`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        alert(`Successfully deleted all uploads by ${user.name}`)
+        // Refresh the user data
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        alert(data.error || "Failed to delete uploads")
+      }
+    } catch (error) {
+      console.error("Error deleting uploads:", error)
+      alert("Failed to delete uploads")
+    } finally {
+      setDeletingUploads(false)
+    }
+  }
+
   const handleResetPassword = async () => {
-    console.log("Reset password clicked for user:", user.name)
-    setDropdownOpen(false)
+    console.log("Reset password clicked for:", user.name)
+    setShowDropdown(false)
 
     const newPassword = prompt(`Enter new password for ${user.name} (minimum 6 characters):`)
     if (!newPassword || newPassword.length < 6) {
@@ -116,8 +177,50 @@ export function AdminUserCard({ user, onEdit, onDelete }: AdminUserCardProps) {
     }
   }
 
+  const toggleRole = async () => {
+    console.log("Toggle role clicked for:", user.name)
+    setShowDropdown(false)
+
+    const newRole = user.role === "Admin" ? "Member" : "Admin"
+
+    if (
+      !confirm(
+        `Change ${user.name}'s role from ${user.role} to ${newRole}?\n\n${
+          newRole === "Admin"
+            ? "They will gain access to admin settings and user management."
+            : "They will lose admin access and only have member privileges."
+        }`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: user.name,
+          email: user.email,
+          role: newRole,
+        }),
+      })
+
+      if (response.ok) {
+        alert(`Successfully changed ${user.name}'s role to ${newRole}`)
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        alert(data.error || "Failed to update role")
+      }
+    } catch (error) {
+      console.error("Error updating role:", error)
+      alert("Failed to update role")
+    }
+  }
+
   return (
-    <Card className="overflow-hidden hover:shadow-md transition-shadow relative">
+    <Card className="overflow-visible hover:shadow-md transition-shadow relative">
       <CardContent className="p-4">
         {/* User Header */}
         <div className="flex items-start justify-between mb-4">
@@ -142,58 +245,79 @@ export function AdminUserCard({ user, onEdit, onDelete }: AdminUserCardProps) {
                 <Mail className="h-3 w-3" />
                 <span className="truncate">{user.email}</span>
               </div>
-              {user.role && <div className="text-xs text-blue-600 font-medium mt-1">{user.role}</div>}
+              {user.role && (
+                <div className={`text-xs font-medium mt-1 ${user.role === "Admin" ? "text-red-600" : "text-blue-600"}`}>
+                  {user.role === "Admin" && <Shield className="inline h-3 w-3 mr-1" />}
+                  {user.role}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Actions Dropdown */}
-          <div className="relative">
-            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 hover:bg-gray-100 relative z-10"
-                  onClick={() => {
-                    console.log("Dropdown trigger clicked for user:", user.name)
-                    setDropdownOpen(!dropdownOpen)
-                  }}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                  <span className="sr-only">Open menu</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="w-48 z-50 bg-white border border-gray-200 shadow-lg"
-                sideOffset={5}
-              >
-                <DropdownMenuItem
+          {/* Custom Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 hover:bg-gray-100"
+              onClick={() => {
+                console.log("Dropdown trigger clicked for user:", user.name)
+                setShowDropdown(!showDropdown)
+              }}
+            >
+              <MoreVertical className="h-4 w-4" />
+              <span className="sr-only">Open menu</span>
+            </Button>
+
+            {/* Custom Dropdown Menu */}
+            {showDropdown && (
+              <div className="absolute right-0 top-8 w-56 bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1">
+                <button
                   onClick={handleEdit}
-                  className="cursor-pointer hover:bg-gray-100 flex items-center px-3 py-2"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center"
                 >
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit User
-                </DropdownMenuItem>
-                <DropdownMenuItem
+                  <Edit className="mr-3 h-4 w-4" />
+                  Edit User Details
+                </button>
+
+                <button
+                  onClick={toggleRole}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center"
+                >
+                  <Shield className="mr-3 h-4 w-4" />
+                  {user.role === "Admin" ? "Demote to Member" : "Promote to Admin"}
+                </button>
+
+                <button
                   onClick={handleResetPassword}
                   disabled={resettingPassword}
-                  className="cursor-pointer hover:bg-gray-100 flex items-center px-3 py-2"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center disabled:opacity-50"
                 >
-                  <Key className="mr-2 h-4 w-4" />
+                  <Key className="mr-3 h-4 w-4" />
                   {resettingPassword ? "Resetting..." : "Reset Password"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="text-red-600 focus:text-red-600 cursor-pointer hover:bg-red-50 flex items-center px-3 py-2"
+                </button>
+
+                <div className="border-t border-gray-100 my-1"></div>
+
+                <button
+                  onClick={handleDeleteUploads}
+                  disabled={deletingUploads || user.uploadCount === 0}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-orange-50 text-orange-600 flex items-center disabled:opacity-50"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {deleting ? "Deleting..." : "Delete User"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <Database className="mr-3 h-4 w-4" />
+                  {deletingUploads ? "Deleting..." : `Delete ${user.uploadCount} Uploads`}
+                </button>
+
+                <button
+                  onClick={handleDeleteUser}
+                  disabled={deleting}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center disabled:opacity-50"
+                >
+                  <Trash2 className="mr-3 h-4 w-4" />
+                  {deleting ? "Deleting..." : "Delete User Account"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
