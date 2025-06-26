@@ -8,8 +8,11 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
+  const [mode, setMode] = useState<"login" | "register">("login")
+  const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -30,14 +33,10 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         const data = await response.json()
         console.log("🔍 Auth Modal: Login successful, data:", data)
 
-        // Store session token in localStorage as backup
         if (data.sessionToken) {
           localStorage.setItem("sessionToken", data.sessionToken)
-          console.log("🔍 Auth Modal: Stored session token in localStorage")
         }
 
-        // The session cookie should be set by the server response
-        // Call onSuccess with user data including session token
         onSuccess({
           ...data.user,
           sessionToken: data.sessionToken,
@@ -56,45 +55,150 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
     }
   }
 
+  const handleRegister = async () => {
+    if (password !== confirmPassword) {
+      setError("Passwords don't match")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, email, password }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("🔍 Auth Modal: Registration successful, data:", data)
+
+        if (data.sessionToken) {
+          localStorage.setItem("sessionToken", data.sessionToken)
+        }
+
+        onSuccess({
+          ...data.user,
+          sessionToken: data.sessionToken,
+        })
+
+        setError("")
+        setLoading(false)
+      } else {
+        const errorData = await response.json()
+        setError(errorData.error || "Registration failed")
+        setLoading(false)
+      }
+    } catch (err: any) {
+      setError(err.message || "Registration failed")
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = () => {
+    if (mode === "login") {
+      handleLogin()
+    } else {
+      handleRegister()
+    }
+  }
+
   if (!isOpen) {
     return null
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div className="mt-3 text-center">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Login</h3>
-          <div className="mt-2 px-7 py-3">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-6 border w-96 shadow-lg rounded-md bg-[#222222] border-[#333333]">
+        <div className="text-center">
+          {/* Tab Headers */}
+          <div className="flex mb-6 bg-[#333333] rounded-lg p-1">
+            <button
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                mode === "login" ? "bg-[#D4AF37] text-[#222222]" : "text-[#D4AF37] hover:bg-[#444444]"
+              }`}
+              onClick={() => setMode("login")}
+            >
+              Sign In
+            </button>
+            <button
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                mode === "register" ? "bg-[#D4AF37] text-[#222222]" : "text-[#D4AF37] hover:bg-[#444444]"
+              }`}
+              onClick={() => setMode("register")}
+            >
+              Create Account
+            </button>
+          </div>
+
+          <h3 className="text-xl font-light text-[#D4AF37] mb-6 font-serif">
+            {mode === "login" ? "Welcome Back" : "Join the Memorial"}
+          </h3>
+
+          <div className="space-y-4">
+            {mode === "register" && (
+              <input
+                type="text"
+                placeholder="Full Name"
+                className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            )}
+
             <input
               type="email"
-              placeholder="Email"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline mb-2"
+              placeholder="Email Address"
+              className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
+
             <input
               type="password"
               placeholder="Password"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline mb-2"
+              className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            {error && <p className="text-red-500 text-xs italic">{error}</p>}
+
+            {mode === "register" && (
+              <input
+                type="password"
+                placeholder="Confirm Password"
+                className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            )}
+
+            {error && <p className="text-red-400 text-sm font-light">{error}</p>}
           </div>
-          <div className="items-center px-4 py-3">
+
+          <div className="mt-6 space-y-3">
             <button
-              className="px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300"
-              onClick={handleLogin}
+              className="w-full py-3 px-4 bg-[#D4AF37] text-[#222222] font-medium rounded-md hover:bg-[#B8941F] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#222222] transition-colors disabled:opacity-50"
+              onClick={handleSubmit}
               disabled={loading}
             >
-              {loading ? "Loading..." : "Login"}
+              {loading
+                ? mode === "login"
+                  ? "Signing In..."
+                  : "Creating Account..."
+                : mode === "login"
+                  ? "Sign In"
+                  : "Create Account"}
             </button>
+
             <button
-              className="px-4 py-2 bg-gray-200 text-gray-700 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 mt-2"
+              className="w-full py-3 px-4 bg-transparent border border-[#444444] text-[#D4AF37] font-medium rounded-md hover:bg-[#333333] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#222222] transition-colors"
               onClick={onClose}
             >
-              Close
+              Cancel
             </button>
           </div>
         </div>
