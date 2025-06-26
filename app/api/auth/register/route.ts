@@ -1,91 +1,100 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import bcrypt from "bcryptjs"
+import { v4 as uuidv4 } from "uuid"
 
-export async function POST(request: Request) {
+const sql = neon(process.env.DATABASE_URL!)
+
+export async function POST(request: NextRequest) {
   try {
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    const { email, password, name } = await request.json()
+
+    if (!email || !password || !name) {
+      return NextResponse.json({ error: "Email, password, and name are required" }, { status: 400 })
     }
 
-    const { name, email, password } = await request.json()
-
-    // Validate input
-    if (!name?.trim() || name.trim().length < 2) {
-      return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 })
-    }
-
-    if (!email?.trim() || !email.includes("@")) {
-      return NextResponse.json({ error: "Valid email is required" }, { status: 400 })
-    }
-
-    if (!password || password.length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
-    }
-
-    const sql = neon(process.env.DATABASE_URL)
-
-    // Check if email already exists
-    const existingUser = await sql`
-      SELECT id FROM users WHERE email = ${email.toLowerCase().trim()}
+    // Check if user already exists
+    const existingUsers = await sql`
+      SELECT id FROM users WHERE email = ${email}
     `
 
-    if (existingUser.length > 0) {
-      return NextResponse.json({ error: "Email already registered" }, { status: 400 })
+    if (existingUsers.length > 0) {
+      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 12)
+    const saltRounds = 12
+    const passwordHash = await bcrypt.hash(password, saltRounds)
 
-    // Create user with Member role by default
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-    await sql`
-      INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
-      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase().trim()}, ${passwordHash}, 'Member', NOW(), NOW())
+    // Create user
+    const newUsers = await sql`
+      INSERT INTO users (email, password_hash, name, role)
+      VALUES (${email}, ${passwordHash}, ${name}, 'user')
+      RETURNING id, email, name, role, profile_image_url, created_at
     `
+
+    const user = newUsers[0]
 
     // Create session
-    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    const sessionToken = uuidv4()
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
     await sql`
-      INSERT INTO user_sessions (id, user_id, expires_at, created_at)
-      VALUES (${sessionId}, ${userId}, ${expiryDate.toISOString()}, NOW())
+      INSERT INTO user_sessions (user_id, session_token, expires_at)
+      VALUES (${user.id}, ${sessionToken}, ${expiresAt})
     `
 
-    console.log("🔍 Register: Created user and session:", name, "Session ID:", sessionId.substring(0, 20) + "...")
+    // Log activity
+    await sql`
+      INSERT INTO activity_logs (user_id, action, details)
+      VALUES (${user.id}, 'register', ${"User registered"})
+    `
 
-    const response = NextResponse.json({
-      success: true,
-      sessionToken: sessionId, // Include session token in response
-      user: {
-        id: userId,
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
-        role: "Member",
-        profileImage: null,
-        sessionToken: sessionId, // Also include in user object
-      },
-    })
-
-    // Set multiple cookies for redundancy
-    const cookieOptions = {
-      httpOnly: false, // Allow JavaScript access
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+    const userData = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      profileImageUrl: user.profile_image_url,
+      createdAt: user.created_at,
+      sessionToken,
     }
 
-    response.cookies.set("session", sessionId, cookieOptions)
-    response.cookies.set("auth-session", sessionId, cookieOptions)
-    response.cookies.set("user-session", sessionId, cookieOptions)
+    // Create response with multiple cookie strategies
+    const response = NextResponse.json({
+      success: true,
+      user: userData,
+      sessionToken,
+    })
 
-    console.log("🔍 Register: Set cookies and returning success")
+    // Set multiple cookies for better compatibility
+    response.cookies.set("sessionToken", sessionToken, {
+      httpOnly: false, // Allow JavaScript access
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+      path: "/",
+    })
+
+    response.cookies.set("session", sessionToken, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60,
+      path: "/",
+    })
+
+    response.cookies.set("auth-token", sessionToken, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60,
+      path: "/",
+    })
+
     return response
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json({ error: "Failed to create account" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
