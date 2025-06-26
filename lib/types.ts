@@ -1,20 +1,18 @@
 export interface User {
-  id: string
+  id: number
   name: string
   email: string
-  role: "user" | "admin"
+  role?: string
   profileImageUrl?: string
   sessionToken?: string
 }
 
 export interface Photo {
-  id: string
+  id: number
   url: string
-  description: string
-  author: string
-  user_id: string
-  created_at: string
-  tags: string[]
+  caption?: string
+  uploadedBy: string
+  uploadedAt: string
+  tags?: string[]
   year?: number
-  profile_image_url?: string
 }

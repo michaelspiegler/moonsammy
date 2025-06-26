@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     `
 
     if (existingUsers.length > 0) {
-      return NextResponse.json({ error: "User already exists with this email" }, { status: 409 })
+      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
     }
 
     // Hash password
@@ -27,68 +27,46 @@ export async function POST(request: NextRequest) {
 
     // Create user
     const newUsers = await sql`
-      INSERT INTO users (name, email, password, role, created_at)
-      VALUES (${name}, ${email}, ${hashedPassword}, 'user', NOW())
-      RETURNING id, name, email, role, profile_image
+      INSERT INTO users (name, email, password_hash, role)
+      VALUES (${name}, ${email}, ${hashedPassword}, 'user')
+      RETURNING id, name, email, role, profile_image_url
     `
 
     const newUser = newUsers[0]
 
-    // Generate session token
-    const sessionToken = uuidv4()
+    // Create session
+    const sessionId = uuidv4()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-    // Store session in database
     await sql`
-      INSERT INTO user_sessions (user_id, session_token, expires_at)
-      VALUES (${newUser.id}, ${sessionToken}, ${expiresAt})
+      INSERT INTO user_sessions (id, user_id, expires_at)
+      VALUES (${sessionId}, ${newUser.id}, ${expiresAt})
     `
 
     // Log activity
     await sql`
-      INSERT INTO admin_logs (action, details, user_id, created_at)
-      VALUES ('user_register', ${JSON.stringify({ email, name, ip: request.ip })}, ${newUser.id}, NOW())
+      INSERT INTO activity_logs (user_id, action, details)
+      VALUES (${newUser.id}, 'register', 'User registered')
     `
 
-    const userData = {
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      profileImage: newUser.profile_image,
-      sessionToken,
-    }
-
-    // Create response with user data
     const response = NextResponse.json({
-      user: userData,
-      sessionToken,
-      message: "Registration successful",
+      success: true,
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        profileImageUrl: newUser.profile_image_url,
+      },
+      sessionToken: sessionId,
     })
 
-    // Set multiple cookies for compatibility
-    response.cookies.set("sessionToken", sessionToken, {
-      httpOnly: false,
+    // Set session cookie
+    response.cookies.set("session", sessionId, {
+      httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours
-      path: "/",
-    })
-
-    response.cookies.set("session", sessionToken, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60, // 24 hours
-      path: "/",
-    })
-
-    response.cookies.set("auth-token", sessionToken, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60, // 24 hours
-      path: "/",
     })
 
     return response
