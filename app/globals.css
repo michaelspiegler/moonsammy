@@ -354,6 +354,23 @@ body {
   z-index: 2147483647 !important;
 }
 
+/* Fixed Header Z-Index Management */
+header {
+  z-index: 999998 !important;
+}
+
+/* Header Navigation Container - Higher than header but lower than modal */
+.header-nav-container {
+  position: relative !important;
+  z-index: 999999 !important;
+}
+
+/* Dropdown Menu - Should be above header but below modal */
+.header-dropdown {
+  position: absolute !important;
+  z-index: 999999 !important;
+}
+
 /* Other theme styles */
 [data-theme="indie90s"] {
   font-family: "Courier New", monospace;
