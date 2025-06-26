@@ -10,12 +10,6 @@ body {
   font-family: Georgia, "Times New Roman", Times, serif;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -37,20 +31,7 @@ body {
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
     --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
   .dark {
     --background: 0 0% 3.9%;
@@ -72,19 +53,6 @@ body {
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
     --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   [data-theme="memorial"] {
@@ -108,50 +76,6 @@ body {
     --input: 0 0% 13%;
     --ring: 45 93% 58%;
   }
-
-  [data-theme="indie90s"] {
-    --background: 39 100% 97%;
-    --foreground: 25 25% 25%;
-    --card: 43 100% 94%;
-    --card-foreground: 25 25% 25%;
-    --popover: 43 100% 94%;
-    --popover-foreground: 25 25% 25%;
-    --primary: 25 95% 53%;
-    --primary-foreground: 39 100% 97%;
-    --secondary: 43 30% 85%;
-    --secondary-foreground: 25 25% 25%;
-    --muted: 43 30% 85%;
-    --muted-foreground: 25 15% 45%;
-    --accent: 33 100% 70%;
-    --accent-foreground: 25 25% 25%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 43 30% 82%;
-    --input: 43 30% 85%;
-    --ring: 25 95% 53%;
-  }
-
-  [data-theme="punk"] {
-    --background: 0 0% 8%;
-    --foreground: 0 0% 95%;
-    --card: 0 0% 12%;
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 0 84% 60%;
-    --primary-foreground: 0 0% 95%;
-    --secondary: 0 0% 20%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 20%;
-    --muted-foreground: 0 0% 65%;
-    --accent: 0 84% 60%;
-    --accent-foreground: 0 0% 95%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 95%;
-    --border: 0 0% 25%;
-    --input: 0 0% 20%;
-    --ring: 0 84% 60%;
-  }
 }
 
 @layer base {
@@ -163,29 +87,10 @@ body {
   }
 }
 
-/* Theme Backgrounds */
-.theme-bg {
-  @apply bg-stone-50;
-}
-
-[data-theme="memorial"] .theme-bg {
-  @apply bg-gray-900;
-}
-
-[data-theme="indie90s"] .theme-bg {
-  @apply bg-amber-50;
-}
-
-[data-theme="punk"] .theme-bg {
-  @apply bg-black;
-}
-
-/* Update the main page background */
 .main-container {
-  @apply min-h-screen theme-bg transition-colors duration-300;
+  @apply min-h-screen bg-background transition-colors duration-300;
 }
 
-/* Memorial Theme Specific Styles */
 [data-theme="memorial"] {
   font-family: "Georgia", "Times New Roman", serif;
 }
@@ -202,16 +107,9 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* Hide decorative dots in memorial theme */
-[data-theme="memorial"] .decorative-dots {
-  display: none;
-}
-
-/* Memorial Theme - Universal Button Styling (Back to Gallery style) */
 [data-theme="memorial"] button,
 [data-theme="memorial"] .btn,
-[data-theme="memorial"] [role="button"],
-[data-theme="memorial"] .tab-button {
+[data-theme="memorial"] [role="button"] {
   background-color: #222222 !important;
   color: hsl(var(--primary)) !important;
   border: 1px solid #333333 !important;
@@ -221,53 +119,23 @@ body {
 
 [data-theme="memorial"] button:hover,
 [data-theme="memorial"] .btn:hover,
-[data-theme="memorial"] [role="button"]:hover,
-[data-theme="memorial"] .tab-button:hover {
+[data-theme="memorial"] [role="button"]:hover {
   background-color: hsl(var(--primary)) !important;
   color: hsl(var(--primary-foreground)) !important;
   border-color: hsl(var(--primary)) !important;
 }
 
-/* Memorial theme cards with #222222 background */
 [data-theme="memorial"] .card,
-[data-theme="memorial"] [data-card],
-[data-theme="memorial"] .bg-white {
+[data-theme="memorial"] [data-card] {
   background-color: #222222 !important;
   border: 1px solid #333333 !important;
-  transition: all 0.2s ease !important;
 }
 
 [data-theme="memorial"] .card:hover,
 [data-theme="memorial"] [data-card]:hover {
-  background-color: #2a2a2a !important;
   border-color: hsl(var(--primary)) !important;
 }
 
-/* Memorial theme - Feed/Instagram cards */
-[data-theme="memorial"] .instagram-card,
-[data-theme="memorial"] .photo-card,
-[data-theme="memorial"] .memory-card {
-  background-color: #222222 !important;
-  border: 1px solid #333333 !important;
-}
-
-/* Memorial theme - Tab navigation */
-[data-theme="memorial"] .tab-navigation,
-[data-theme="memorial"] .view-toggle {
-  background-color: #222222 !important;
-  border-radius: 8px !important;
-  padding: 4px !important;
-}
-
-/* Memorial theme - Active tab styling */
-[data-theme="memorial"] .tab-active,
-[data-theme="memorial"] [data-state="active"] {
-  background-color: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
-}
-
-/* Memorial theme - Input fields */
 [data-theme="memorial"] input,
 [data-theme="memorial"] textarea,
 [data-theme="memorial"] select {
@@ -276,180 +144,37 @@ body {
   border: 1px solid #333333 !important;
 }
 
-[data-theme="memorial"] input:focus,
-[data-theme="memorial"] textarea:focus,
-[data-theme="memorial"] select:focus {
-  border-color: hsl(var(--primary)) !important;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2) !important;
-}
-
-/* Memorial theme - Upload section */
-[data-theme="memorial"] .upload-area {
-  background-color: #222222 !important;
-  border: 2px dashed #333333 !important;
-}
-
-[data-theme="memorial"] .upload-area:hover {
-  border-color: hsl(var(--primary)) !important;
-  background-color: #2a2a2a !important;
-}
-
-/* Memorial theme - Settings panels */
-[data-theme="memorial"] .settings-panel,
-[data-theme="memorial"] .dropdown-content {
-  background-color: #222222 !important;
-  border: 1px solid #333333 !important;
-}
-
-/* Memorial theme text colors */
 [data-theme="memorial"] h1,
 [data-theme="memorial"] h2,
 [data-theme="memorial"] h3 {
   color: hsl(var(--primary));
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-[data-theme="memorial"] .text-gray-800 {
-  color: hsl(var(--primary)) !important;
+/* Auth Modal: High z-index to appear on top */
+.auth-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* High z-index */
 }
 
-[data-theme="memorial"] .text-gray-600,
-[data-theme="memorial"] .text-gray-700 {
-  color: hsl(var(--muted-foreground)) !important;
+.auth-modal-container {
+  background-color: #222222;
+  border: 1px solid #333333;
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
 }
 
-[data-theme="memorial"] .text-gray-500 {
-  color: hsl(var(--muted-foreground)) !important;
-}
-
-[data-theme="memorial"] .text-white {
-  color: hsl(var(--foreground)) !important;
-}
-
-/* Other theme styles */
-[data-theme="indie90s"] {
-  font-family: "Courier New", monospace;
-}
-
-[data-theme="indie9s"] .photo-card {
-  filter: sepia(20%) saturate(120%);
-  border: 2px solid hsl(var(--accent));
-}
-
-[data-theme="punk"] {
-  font-family: "Impact", "Arial Black", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-[data-theme="punk"] .photo-card {
-  border: 3px solid hsl(var(--primary));
-  box-shadow: 0 0 10px rgba(220, 38, 127, 0.3);
-}
-
-[data-theme="punk"] h1,
-[data-theme="punk"] h2,
-[data-theme="punk"] h3 {
-  text-shadow: 2px 2px 0px hsl(var(--primary));
-}
-
-/* Slideshow transitions */
-.slideshow-fade-enter {
-  opacity: 0;
-}
-.slideshow-fade-enter-active {
-  opacity: 1;
-  transition: opacity var(--transition-duration, 500ms) ease-in-out;
-}
-.slideshow-fade-exit {
-  opacity: 1;
-}
-.slideshow-fade-exit-active {
-  opacity: 0;
-  transition: opacity var(--transition-duration, 500ms) ease-in-out;
-}
-
-.slideshow-slide-enter {
-  transform: translateX(100%);
-}
-.slideshow-slide-enter-active {
-  transform: translateX(0%);
-  transition: transform var(--transition-duration, 500ms) ease-in-out;
-}
-.slideshow-slide-exit {
-  transform: translateX(0%);
-}
-.slideshow-slide-exit-active {
-  transform: translateX(-100%);
-  transition: transform var(--transition-duration, 500ms) ease-in-out;
-}
-
-.slideshow-zoom-enter {
-  transform: scale(0.8);
-  opacity: 0;
-}
-.slideshow-zoom-enter-active {
-  transform: scale(1);
-  opacity: 1;
-  transition: all var(--transition-duration, 500ms) ease-in-out;
-}
-.slideshow-zoom-exit {
-  transform: scale(1);
-  opacity: 1;
-}
-.slideshow-zoom-exit-active {
-  transform: scale(1.2);
-  opacity: 0;
-  transition: all var(--transition-duration, 500ms) ease-in-out;
-}
-
-.slideshow-blur-enter {
-  filter: blur(10px);
-  opacity: 0;
-}
-.slideshow-blur-enter-active {
-  filter: blur(0px);
-  opacity: 1;
-  transition: all var(--transition-duration, 500ms) ease-in-out;
-}
-.slideshow-blur-exit {
-  filter: blur(0px);
-  opacity: 1;
-}
-.slideshow-blur-exit-active {
-  filter: blur(10px);
-  opacity: 0;
-  transition: all var(--transition-duration, 500ms) ease-in-out;
-}
-
-.slideshow-flip-enter {
-  transform: rotateY(-90deg);
-  opacity: 0;
-}
-.slideshow-flip-enter-active {
-  transform: rotateY(0deg);
-  opacity: 1;
-  transition: all var(--transition-duration, 500ms) ease-in-out;
-}
-.slideshow-flip-exit {
-  transform: rotateY(0deg);
-  opacity: 1;
-}
-.slideshow-flip-exit-active {
-  transform: rotateY(90deg);
-  opacity: 0;
-  transition: all var(--transition-duration, 500ms) ease-in-out;
-}
-
-.ken-burns {
-  animation: kenBurns var(--slide-duration, 5s) ease-in-out infinite alternate;
-}
-
-@keyframes kenBurns {
-  0% {
-    transform: scale(1) translate(0, 0);
-  }
-  100% {
-    transform: scale(1.1) translate(-2%, -2%);
-  }
+/* Ensure header dropdown appears above content but below modal */
+.header-dropdown-content {
+  z-index: 50;
 }

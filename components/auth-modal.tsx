@@ -1,141 +1,138 @@
 "use client"
-
-import type React from "react"
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
+import type React from "react"
+import type { User } from "@/lib/types"
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (user: User) => void
 }
 
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
-  const [isLoginView, setIsLoginView] = useState(true)
+  const [mode, setMode] = useState<"login" | "register">("login")
+  const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [name, setName] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const { toast } = useToast()
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    if (mode === "register" && password !== confirmPassword) {
+      setError("Passwords do not match.")
+      return
+    }
+    setLoading(true)
+    setError("")
 
-    const url = isLoginView ? "/api/auth/login" : "/api/auth/register"
-    const body = isLoginView ? { email, password } : { email, password, name }
+    const url = mode === "login" ? "/api/auth/login" : "/api/auth/register"
+    const body = mode === "login" ? { email, password } : { name, email, password }
 
     try {
-      const res = await fetch(url, {
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
 
-      const data = await res.json()
+      const data = await response.json()
 
-      if (!res.ok) {
-        throw new Error(data.error || "Something went wrong")
+      if (!response.ok) {
+        throw new Error(data.error || "An unknown error occurred.")
       }
 
-      toast({
-        title: "Success",
-        description: isLoginView ? "Logged in successfully." : "Account created successfully.",
-      })
-      onSuccess()
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      })
+      if (data.user) {
+        onSuccess(data.user)
+      } else {
+        throw new Error("Login successful, but no user data was returned.")
+      }
+    } catch (err: any) {
+      setError(err.message)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
+  if (!isOpen) {
+    return null
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px] bg-background text-foreground memorial:bg-black memorial:text-gold-50 memorial:border-gold-700">
-        <DialogHeader>
-          <DialogTitle>{isLoginView ? "Sign In" : "Create Account"}</DialogTitle>
-          <DialogDescription>
-            {isLoginView ? "Sign in to continue." : "Create an account to share your memories."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleAuth}>
-          <div className="grid gap-4 py-4">
-            {!isLoginView && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Name
-                </Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="col-span-3"
-                  required
-                />
-              </div>
-            )}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="password" className="text-right">
-                Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="col-span-3"
-                required
-              />
-            </div>
+    <div className="auth-modal-overlay" onClick={onClose}>
+      <div className="auth-modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="flex mb-6 bg-[#333333] rounded-lg p-1">
+          <button
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              mode === "login" ? "bg-[#D4AF37] text-[#222222]" : "text-[#D4AF37] hover:bg-[#444444]"
+            }`}
+            onClick={() => setMode("login")}
+          >
+            Sign In
+          </button>
+          <button
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              mode === "register" ? "bg-[#D4AF37] text-[#222222]" : "text-[#D4AF37] hover:bg-[#444444]"
+            }`}
+            onClick={() => setMode("register")}
+          >
+            Create Account
+          </button>
+        </div>
+
+        <h3 className="text-xl font-light text-center text-[#D4AF37] mb-6 font-serif">
+          {mode === "login" ? "Welcome Back" : "Join the Memorial"}
+        </h3>
+
+        <form onSubmit={handleAuth} className="space-y-4">
+          {mode === "register" && (
+            <input
+              type="text"
+              placeholder="Full Name"
+              className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          )}
+          <input
+            type="email"
+            placeholder="Email Address"
+            className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {mode === "register" && (
+            <input
+              type="password"
+              placeholder="Confirm Password"
+              className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
+          )}
+          {error && <p className="text-red-400 text-sm text-center font-light">{error}</p>}
+          <div className="mt-6 space-y-3">
+            <button type="submit" className="w-full btn" disabled={loading}>
+              {loading ? "Processing..." : mode === "login" ? "Sign In" : "Create Account"}
+            </button>
+            <button type="button" className="w-full btn" onClick={onClose}>
+              Cancel
+            </button>
           </div>
-          <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center">
-            <Button
-              type="button"
-              variant="link"
-              onClick={() => setIsLoginView(!isLoginView)}
-              className="text-sm memorial:text-gold-200 hover:memorial:text-gold-50"
-            >
-              {isLoginView ? "Need an account?" : "Already have an account?"}
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="memorial:bg-transparent memorial:border memorial:border-gold-500 memorial:text-gold-500 hover:memorial:bg-gold-500 hover:memorial:text-black"
-            >
-              {isLoading ? "Processing..." : isLoginView ? "Sign In" : "Create Account"}
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }

@@ -2,134 +2,114 @@
 
 import { useState, useEffect } from "react"
 import { HeaderNav } from "@/components/header-nav"
-import { InstagramFeed } from "@/components/instagram-feed"
-import { ViewToggle } from "@/components/view-toggle"
-import { UploadSection } from "@/components/upload-section"
-import { DownloadSection } from "@/components/download-section"
 import { AuthModal } from "@/components/auth-modal"
-import { useTheme } from "@/components/theme-provider"
+import { PhotoGallery } from "@/components/photo-gallery"
+import { UploadSection } from "@/components/upload-section"
+import { PhotoFilter } from "@/components/photo-filter"
+import { DownloadSection } from "@/components/download-section"
+import { Toaster } from "@/components/ui/toaster"
+import type { User, Photo } from "@/lib/types"
 
-export default function Home() {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const { theme } = useTheme()
-
-  const checkAuth = async () => {
-    try {
-      const response = await fetch("/api/auth/me")
-      if (response.ok) {
-        const userData = await response.json()
-        setUser(userData.user)
-      } else {
-        setUser(null)
-      }
-    } catch (error) {
-      console.error("Auth check failed:", error)
-      setUser(null)
-    } finally {
-      setLoading(false)
-    }
-  }
+export default function HomePage() {
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [photos, setPhotos] = useState<Photo[]>([])
+  const [filteredPhotos, setFilteredPhotos] = useState<Photo[]>([])
 
   useEffect(() => {
-    checkAuth()
+    const checkUserSession = async () => {
+      setIsLoading(true)
+      try {
+        const res = await fetch("/api/auth/me")
+        if (res.ok) {
+          const data = await res.json()
+          setUser(data.user)
+        }
+      } catch (error) {
+        console.error("Session check failed:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    checkUserSession()
   }, [])
 
-  const handleAuthSuccess = () => {
-    setShowAuthModal(false)
-    checkAuth() // Re-check auth to get updated user state
+  useEffect(() => {
+    const fetchPhotos = async () => {
+      try {
+        const res = await fetch("/api/photos")
+        if (res.ok) {
+          const data = await res.json()
+          setPhotos(data)
+          setFilteredPhotos(data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch photos:", error)
+      }
+    }
+    fetchPhotos()
+  }, [])
+
+  const handleLoginSuccess = (loggedInUser: User) => {
+    setUser(loggedInUser)
+    setIsAuthModalOpen(false)
   }
 
   const handleLogout = () => {
     setUser(null)
   }
 
-  if (loading) {
+  const handleUploadSuccess = (newPhoto: Photo) => {
+    const updatedPhotos = [newPhoto, ...photos]
+    setPhotos(updatedPhotos)
+    setFilteredPhotos(updatedPhotos)
+  }
+
+  if (isLoading) {
     return (
-      <div className="main-container flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <p className="text-foreground">Loading...</p>
       </div>
     )
   }
 
   return (
     <div className="main-container">
-      <header className="container mx-auto px-4 py-8">
-        <HeaderNav user={user} onLogout={handleLogout} onLoginClick={() => setShowAuthModal(true)} />
-      </header>
+      <HeaderNav user={user} onLoginClick={() => setIsAuthModalOpen(true)} onLogout={handleLogout} />
 
-      <main>
-        <div className="container mx-auto px-4">
-          {/* Memorial Header */}
-          <div className="memorial-header-layout bg-white/50 backdrop-blur-sm rounded-xl p-8 mb-8 border border-gray-200">
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="flex-shrink-0">
-                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-4 border-gray-300 shadow-lg">
-                  <img src="/images/brian-portrait.png" alt="Brian Quain" className="w-full h-full object-cover" />
-                </div>
-              </div>
-              <div className="text-center md:text-left">
-                <h1 className="memorial-title text-4xl md:text-5xl font-bold text-gray-800 mb-2">
-                  Remembering Brian Quain
-                </h1>
-                <p className="text-xl text-gray-600 mb-4">Celebrating a life well lived</p>
-                <p className="text-gray-700 max-w-2xl leading-relaxed">
-                  A beloved friend, colleague, and inspiration to many. This memorial gallery celebrates Brian's life
-                  through the memories and photos shared by those who knew him.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Auth Required Section */}
-          {!user && (
-            <div className="bg-white/50 backdrop-blur-sm rounded-xl p-8 mb-8 border border-gray-200 text-center">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Sign in to continue</h2>
-              <p className="text-gray-600 mb-6">Please sign in to view and share memories of Brian</p>
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium"
-              >
-                Create Account / Sign In
-              </button>
-            </div>
-          )}
-
-          {/* Main Content - Only show if authenticated */}
-          {user && (
-            <>
-              <div className="mb-8">
-                <ViewToggle />
-              </div>
-              <div className="mb-8">
-                <UploadSection user={user} />
-              </div>
-              <div className="mb-8">
-                <InstagramFeed />
-              </div>
-              <div className="mb-8">
-                <DownloadSection />
-              </div>
-            </>
-          )}
+      <main className="container mx-auto px-4 py-8">
+        <div className="text-center mb-12 memorial-header-layout p-8">
+          <h1 className="text-5xl font-bold memorial-title">In Loving Memory of Brian Quain</h1>
+          <p className="text-lg mt-4 text-muted-foreground">A collection of shared moments and cherished memories.</p>
         </div>
+
+        {!user && (
+          <div className="text-center bg-card p-6 rounded-lg shadow-lg mb-8 border border-border">
+            <h2 className="text-2xl font-semibold text-card-foreground">Welcome</h2>
+            <p className="text-muted-foreground mt-2">Please sign in to upload your photos and share your memories.</p>
+            <button onClick={() => setIsAuthModalOpen(true)} className="mt-4 btn">
+              Sign In or Create Account
+            </button>
+          </div>
+        )}
+
+        {user && <UploadSection onSuccess={handleUploadSuccess} />}
+
+        <div className="my-8">
+          <PhotoFilter photos={photos} onFilter={setFilteredPhotos} />
+        </div>
+
+        <PhotoGallery photos={filteredPhotos} />
+
+        <DownloadSection />
       </main>
 
-      <footer className="mt-16 pt-8 border-t border-gray-200">
-        <div className="container mx-auto px-4 text-center text-gray-600">
-          <p className="mb-2">In loving memory of Brian Quain</p>
-          <p className="text-sm">
-            This memorial gallery is maintained by friends and family. If you have photos or memories to share, please
-            sign in and contribute.
-          </p>
-        </div>
-      </footer>
+      <Toaster />
 
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} />
+      {isAuthModalOpen && (
+        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} onSuccess={handleLoginSuccess} />
+      )}
     </div>
   )
 }

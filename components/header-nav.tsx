@@ -1,111 +1,74 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
+
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { User, Settings, Shield, LogOut } from "lucide-react"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
+import { ThemeSelector } from "./theme-selector"
+import type { User } from "@/lib/types"
 
 interface HeaderNavProps {
-  user: any
-  onLogout: () => void
+  user: User | null
   onLoginClick: () => void
+  onLogout: () => void
 }
 
-export function HeaderNav({ user, onLogout, onLoginClick }: HeaderNavProps) {
-  const [showDropdown, setShowDropdown] = useState(false)
+export function HeaderNav({ user, onLoginClick, onLogout }: HeaderNavProps) {
   const router = useRouter()
-  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
-
-  const handleSignOut = async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" })
-      onLogout()
-      setShowDropdown(false)
-      router.push("/") // Navigate to home on logout
-    } catch (error) {
-      console.error("Sign out error:", error)
-    }
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" })
+    onLogout()
+    router.push("/")
+    router.refresh()
   }
 
   return (
-    <div className="flex items-center justify-between w-full">
-      <div className="flex items-center gap-4 text-sm">
-        <a href="/faq" className="text-foreground hover:text-primary transition-colors">
-          FAQ
-        </a>
-      </div>
-
-      {user ? (
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-muted transition-colors"
-          >
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <User className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <span className="text-foreground text-sm">{user.name}</span>
-          </button>
-
-          {showDropdown && (
-            <div className="absolute right-0 mt-2 w-48 bg-background border rounded-md shadow-lg z-50">
-              <div className="py-1">
-                <div className="px-4 py-2 text-xs text-muted-foreground border-b">{user.role || "Member"}</div>
-
-                <button
-                  onClick={() => {
-                    setShowDropdown(false)
-                    router.push("/profile")
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted flex items-center gap-2"
-                >
-                  <Settings className="w-4 h-4" />
-                  Profile/Settings
-                </button>
-
-                {user.role === "Admin" && (
-                  <button
-                    onClick={() => {
-                      setShowDropdown(false)
-                      router.push("/admin")
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted flex items-center gap-2"
-                  >
-                    <Shield className="w-4 h-4" />
-                    Admin Settings
-                  </button>
+    <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-sm">
+      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <Link href="/" className="text-2xl font-bold text-primary font-serif">
+          Brian Quain Memorial
+        </Link>
+        <div className="flex items-center gap-4">
+          <ThemeSelector />
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.profileImageUrl || "/placeholder-user.jpg"} alt={user.name} />
+                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 header-dropdown-content" align="end" forceMount>
+                <DropdownMenuItem disabled>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{user.name}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => router.push("/profile")}>Profile</DropdownMenuItem>
+                {user.role === "admin" && (
+                  <DropdownMenuItem onClick={() => router.push("/admin")}>Admin Dashboard</DropdownMenuItem>
                 )}
-
-                <button
-                  onClick={handleSignOut}
-                  className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-muted flex items-center gap-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </button>
-              </div>
-            </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button onClick={onLoginClick}>Sign In</Button>
           )}
         </div>
-      ) : (
-        <button
-          onClick={onLoginClick}
-          className="px-4 py-2 bg-primary text-primary-foreground font-medium rounded-md hover:bg-primary/90 transition-colors"
-        >
-          <User className="w-4 h-4 inline mr-2" />
-          Sign In
-        </button>
-      )}
-    </div>
+      </div>
+    </header>
   )
 }
