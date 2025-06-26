@@ -112,7 +112,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[9999]">
       <div className="relative top-20 mx-auto p-6 border w-96 shadow-lg rounded-md bg-[#222222] border-[#333333]">
         <div className="text-center">
           {/* Tab Headers */}
