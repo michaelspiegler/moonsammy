@@ -325,6 +325,33 @@ body {
   color: hsl(var(--foreground)) !important;
 }
 
+/* Auth Modal Styles - Properly Centered */
+.auth-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+  padding: 20px;
+}
+
+.auth-modal-container {
+  background-color: #222222;
+  border: 1px solid #333333;
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
 /* Other theme styles */
 [data-theme="indie90s"] {
   font-family: "Courier New", monospace;
