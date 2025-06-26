@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
     // Find user by email
     const users = await sql`
-      SELECT id, name, email, password, role, profile_image 
+      SELECT id, name, email, password_hash, role, profile_image_url 
       FROM users 
       WHERE email = ${email}
     `
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const user = users[0]
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password)
+    const isValidPassword = await bcrypt.compare(password, user.password_hash)
     if (!isValidPassword) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role,
-      profileImage: user.profile_image,
+      profileImageUrl: user.profile_image_url,
       sessionToken,
     }
 
