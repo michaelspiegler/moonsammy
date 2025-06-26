@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
 
     // Find user by email
     const users = await sql`
-      SELECT id, email, password_hash, name, role, profile_image_url, created_at
+      SELECT id, email, name, password_hash, role, profile_image_url, created_at
       FROM users 
-      WHERE email = ${email}
+      WHERE email = ${email.toLowerCase()}
     `
 
     if (users.length === 0) {
@@ -32,10 +32,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
     }
 
-    // Create session
+    // Generate session token
     const sessionToken = uuidv4()
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
+    // Create session
     await sql`
       INSERT INTO user_sessions (user_id, session_token, expires_at)
       VALUES (${user.id}, ${sessionToken}, ${expiresAt})
@@ -43,15 +44,16 @@ export async function POST(request: NextRequest) {
       DO UPDATE SET 
         session_token = ${sessionToken},
         expires_at = ${expiresAt},
-        updated_at = NOW()
+        updated_at = CURRENT_TIMESTAMP
     `
 
     // Log activity
     await sql`
-      INSERT INTO activity_logs (user_id, action, details)
-      VALUES (${user.id}, 'login', ${"User logged in"})
+      INSERT INTO admin_logs (action, details, user_id, created_at)
+      VALUES ('user_login', ${JSON.stringify({ email, user_id: user.id })}, ${user.id}, CURRENT_TIMESTAMP)
     `
 
+    // Prepare user data (exclude password)
     const userData = {
       id: user.id,
       email: user.email,
@@ -59,22 +61,21 @@ export async function POST(request: NextRequest) {
       role: user.role,
       profileImageUrl: user.profile_image_url,
       createdAt: user.created_at,
-      sessionToken,
     }
 
-    // Create response with multiple cookie strategies
+    // Create response with user data and session token
     const response = NextResponse.json({
       success: true,
       user: userData,
-      sessionToken,
+      sessionToken: sessionToken,
     })
 
-    // Set multiple cookies for better compatibility
+    // Set multiple cookies for compatibility
     response.cookies.set("sessionToken", sessionToken, {
       httpOnly: false, // Allow JavaScript access
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+      maxAge: 24 * 60 * 60, // 24 hours
       path: "/",
     })
 
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60,
+      maxAge: 24 * 60 * 60,
       path: "/",
     })
 
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60,
+      maxAge: 24 * 60 * 60,
       path: "/",
     })
 
