@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user: null })
     }
 
-    // Get all possible session sources
+    // Get all possible session sources with better debugging
     const cookieStore = request.cookies
     const allCookies = cookieStore.getAll()
-    console.log(
-      "🔍 Auth me: All cookies received:",
-      allCookies.map((c) => `${c.name}=${c.value.substring(0, 10)}...`),
-    )
+    console.log("🔍 Auth me: All cookies received:", allCookies.length)
+    allCookies.forEach((cookie, index) => {
+      console.log(`🔍 Auth me: Cookie ${index + 1}: ${cookie.name}=${cookie.value.substring(0, 15)}...`)
+    })
 
     const sessionFromCookie = cookieStore.get("session")?.value
     const sessionFromAuthCookie = cookieStore.get("auth-session")?.value
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Auth me: Valid session found - returning user data")
 
-    // Return user data including role
+    // Return user data including role AND session token
     const userData = {
       user: {
         id: session.id,
@@ -96,13 +96,13 @@ export async function GET(request: NextRequest) {
         email: session.email,
         role: session.role || "Member",
         profileImage: session.profile_image_url,
-        sessionToken: sessionId,
+        sessionToken: sessionId, // Include session token in response
       },
     }
 
     const response = NextResponse.json(userData)
 
-    // Force set cookies with multiple strategies
+    // Force set cookies with multiple strategies and longer expiry
     const cookieOptions = {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",

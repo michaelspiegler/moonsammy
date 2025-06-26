@@ -16,6 +16,7 @@ interface UserType {
   email: string
   role?: string
   profileImage?: string
+  sessionToken?: string
 }
 
 interface HeaderNavProps {
@@ -54,6 +55,9 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
       const response = await fetch("/api/auth/me", {
         credentials: "include",
         cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
       })
       const data = await response.json()
       console.log("Header: Auth check result:", data?.user?.name, "role:", data?.user?.role)
@@ -112,18 +116,36 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
     }
   }
 
-  const handleAdminSettings = (e: React.MouseEvent) => {
+  const handleAdminSettings = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
     console.log("🔍 Admin Settings clicked")
     console.log("🔍 Current user role:", (user || propUser)?.role)
+    console.log("🔍 Current cookies before navigation:", document.cookie)
+
+    const currentUser = user || propUser
+    if (!currentUser || currentUser.role !== "Admin") {
+      console.log("🔍 User is not admin, aborting navigation")
+      alert("Admin access required")
+      return
+    }
 
     setShowDropdown(false)
 
-    // Use window.location instead of router.push to avoid any auth issues
+    // Force set cookies before navigation if we have session token
+    if (currentUser.sessionToken) {
+      console.log("🔍 Setting cookies before admin navigation")
+      document.cookie = `session=${currentUser.sessionToken}; path=/; max-age=${30 * 24 * 60 * 60}`
+      document.cookie = `auth-session=${currentUser.sessionToken}; path=/; max-age=${30 * 24 * 60 * 60}`
+      document.cookie = `user-session=${currentUser.sessionToken}; path=/; max-age=${30 * 24 * 60 * 60}`
+    }
+
+    // Use Next.js router with a small delay
     setTimeout(() => {
-      window.location.href = "/admin"
+      console.log("🔍 Navigating to admin page...")
+      console.log("🔍 Cookies after setting:", document.cookie)
+      router.push("/admin")
     }, 100)
   }
 
@@ -138,6 +160,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
     // Store session token
     if (userData.sessionToken) {
       localStorage.setItem("sessionToken", userData.sessionToken)
+      console.log("Header: Stored session token in localStorage")
     }
 
     console.log("Header: Auth completed, user set to:", userData)
