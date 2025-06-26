@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
@@ -33,7 +35,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
 
   // Update local user when prop changes
   useEffect(() => {
-    console.log("Header: prop user changed to:", propUser)
+    console.log("Header: prop user changed to:", propUser?.name, "role:", propUser?.role)
     setUser(propUser || null)
     setImageError(false)
   }, [propUser])
@@ -48,12 +50,13 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
 
   const checkAuthStatus = async () => {
     try {
+      console.log("Header: Checking auth status...")
       const response = await fetch("/api/auth/me", {
         credentials: "include",
         cache: "no-store",
       })
       const data = await response.json()
-      console.log("Header auth check result:", data)
+      console.log("Header: Auth check result:", data?.user?.name, "role:", data?.user?.role)
       if (data.user) {
         setUser(data.user)
         onAuthChange?.(data.user)
@@ -62,7 +65,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
         onAuthChange?.(null)
       }
     } catch (error) {
-      console.error("Auth check failed:", error)
+      console.error("Header: Auth check failed:", error)
       setUser(null)
       onAuthChange?.(null)
     } finally {
@@ -72,6 +75,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
 
   const handleLogout = async () => {
     try {
+      console.log("Header: Logging out...")
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
@@ -79,9 +83,11 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
       setUser(null)
       onAuthChange?.(null)
       setShowDropdown(false)
+      // Clear localStorage
+      localStorage.removeItem("sessionToken")
       window.location.href = "/"
     } catch (error) {
-      console.error("Logout error:", error)
+      console.error("Header: Logout error:", error)
     }
   }
 
@@ -106,20 +112,35 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
     }
   }
 
-  const handleAdminSettings = () => {
+  const handleAdminSettings = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
     console.log("🔍 Admin Settings clicked")
+    console.log("🔍 Current user role:", (user || propUser)?.role)
+
     setShowDropdown(false)
-    router.push("/admin")
+
+    // Use window.location instead of router.push to avoid any auth issues
+    setTimeout(() => {
+      window.location.href = "/admin"
+    }, 100)
   }
 
   const handleAuthSuccess = async (userData: UserType) => {
-    console.log("Header auth success:", userData)
+    console.log("Header: Auth success:", userData?.name, "role:", userData?.role)
     setUser(userData)
     onAuthChange?.(userData)
     onSuccess?.(userData)
     setShowAuthModal(false)
     setImageError(false)
-    console.log("Header auth completed, user set to:", userData)
+
+    // Store session token
+    if (userData.sessionToken) {
+      localStorage.setItem("sessionToken", userData.sessionToken)
+    }
+
+    console.log("Header: Auth completed, user set to:", userData)
   }
 
   const handleImageError = () => {
@@ -149,6 +170,8 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
 
   const currentUser = user || propUser
   const isAdmin = currentUser?.role === "Admin"
+
+  console.log("Header: Rendering with user:", currentUser?.name, "role:", currentUser?.role, "isAdmin:", isAdmin)
 
   return (
     <div className="flex items-center justify-end">
