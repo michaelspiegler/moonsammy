@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,7 +14,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { useRouter } from "next/navigation"
 
 interface AuthModalProps {
   isOpen: boolean
@@ -30,7 +28,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   const [name, setName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
-  const router = useRouter()
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,9 +54,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         description: isLoginView ? "Logged in successfully." : "Account created successfully.",
       })
       onSuccess()
-      onClose()
-      // Refresh the page to update session state
-      router.refresh()
     } catch (error: any) {
       toast({
         title: "Error",

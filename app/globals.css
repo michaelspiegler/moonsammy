@@ -6,6 +6,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.font-serif {
+  font-family: Georgia, "Times New Roman", Times, serif;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -83,7 +87,6 @@ body {
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* Memorial Theme - Elegant dark with gold accents */
   [data-theme="memorial"] {
     --background: 0 0% 8%;
     --foreground: 45 100% 85%;
@@ -106,7 +109,6 @@ body {
     --ring: 45 93% 58%;
   }
 
-  /* 90s Indie Theme - Warm, nostalgic colors */
   [data-theme="indie90s"] {
     --background: 39 100% 97%;
     --foreground: 25 25% 25%;
@@ -129,7 +131,6 @@ body {
     --ring: 25 95% 53%;
   }
 
-  /* Punk Rock Theme - Bold black and red */
   [data-theme="punk"] {
     --background: 0 0% 8%;
     --foreground: 0 0% 95%;
@@ -162,7 +163,7 @@ body {
   }
 }
 
-/* Add these theme-aware background utilities */
+/* Theme Backgrounds */
 .theme-bg {
   @apply bg-stone-50;
 }
@@ -325,58 +326,12 @@ body {
   color: hsl(var(--foreground)) !important;
 }
 
-/* Auth Modal Styles - Highest Priority */
-.auth-modal-overlay {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  background-color: rgba(0, 0, 0, 0.8) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  z-index: 2147483647 !important;
-  padding: 20px !important;
-}
-
-.auth-modal-container {
-  background-color: #222222 !important;
-  border: 1px solid #333333 !important;
-  border-radius: 12px !important;
-  padding: 24px !important;
-  width: 100% !important;
-  max-width: 400px !important;
-  max-height: 90vh !important;
-  overflow-y: auto !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
-  position: relative !important;
-  z-index: 2147483647 !important;
-}
-
-/* Fixed Header Z-Index Management */
-header {
-  z-index: 999998 !important;
-}
-
-/* Header Navigation Container - Higher than header but lower than modal */
-.header-nav-container {
-  position: relative !important;
-  z-index: 999999 !important;
-}
-
-/* Dropdown Menu - Should be above header but below modal */
-.header-dropdown {
-  position: absolute !important;
-  z-index: 999999 !important;
-}
-
 /* Other theme styles */
 [data-theme="indie90s"] {
   font-family: "Courier New", monospace;
 }
 
-[data-theme="indie90s"] .photo-card {
+[data-theme="indie9s"] .photo-card {
   filter: sepia(20%) saturate(120%);
   border: 2px solid hsl(var(--accent));
 }
