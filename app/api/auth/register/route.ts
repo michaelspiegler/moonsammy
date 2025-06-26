@@ -13,28 +13,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 })
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters long" }, { status: 400 })
-    }
-
     // Check if user already exists
     const existingUsers = await sql`
-      SELECT id FROM users WHERE email = ${email.toLowerCase()}
+      SELECT id FROM users WHERE email = ${email}
     `
 
     if (existingUsers.length > 0) {
-      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
+      return NextResponse.json({ error: "User already exists with this email" }, { status: 409 })
     }
 
     // Hash password
-    const saltRounds = 12
-    const passwordHash = await bcrypt.hash(password, saltRounds)
+    const hashedPassword = await bcrypt.hash(password, 12)
 
     // Create user
     const newUsers = await sql`
-      INSERT INTO users (name, email, password_hash, role, created_at)
-      VALUES (${name}, ${email.toLowerCase()}, ${passwordHash}, 'user', CURRENT_TIMESTAMP)
-      RETURNING id, name, email, role, profile_image_url, created_at
+      INSERT INTO users (name, email, password, role, created_at)
+      VALUES (${name}, ${email}, ${hashedPassword}, 'user', NOW())
+      RETURNING id, name, email, role, profile_image
     `
 
     const newUser = newUsers[0]
@@ -43,7 +38,7 @@ export async function POST(request: NextRequest) {
     const sessionToken = uuidv4()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-    // Create session
+    // Store session in database
     await sql`
       INSERT INTO user_sessions (user_id, session_token, expires_at)
       VALUES (${newUser.id}, ${sessionToken}, ${expiresAt})
@@ -52,29 +47,28 @@ export async function POST(request: NextRequest) {
     // Log activity
     await sql`
       INSERT INTO admin_logs (action, details, user_id, created_at)
-      VALUES ('user_register', ${JSON.stringify({ email, user_id: newUser.id })}, ${newUser.id}, CURRENT_TIMESTAMP)
+      VALUES ('user_register', ${JSON.stringify({ email, name, ip: request.ip })}, ${newUser.id}, NOW())
     `
 
-    // Prepare user data
     const userData = {
       id: newUser.id,
-      email: newUser.email,
       name: newUser.name,
+      email: newUser.email,
       role: newUser.role,
-      profileImageUrl: newUser.profile_image_url,
-      createdAt: newUser.created_at,
+      profileImage: newUser.profile_image,
+      sessionToken,
     }
 
-    // Create response with user data and session token
+    // Create response with user data
     const response = NextResponse.json({
-      success: true,
       user: userData,
-      sessionToken: sessionToken,
+      sessionToken,
+      message: "Registration successful",
     })
 
     // Set multiple cookies for compatibility
     response.cookies.set("sessionToken", sessionToken, {
-      httpOnly: false, // Allow JavaScript access
+      httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours
@@ -85,7 +79,7 @@ export async function POST(request: NextRequest) {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 24 * 60 * 60,
+      maxAge: 24 * 60 * 60, // 24 hours
       path: "/",
     })
 
@@ -93,7 +87,7 @@ export async function POST(request: NextRequest) {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 24 * 60 * 60,
+      maxAge: 24 * 60 * 60, // 24 hours
       path: "/",
     })
 

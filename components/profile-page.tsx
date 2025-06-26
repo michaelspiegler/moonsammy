@@ -8,42 +8,43 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Upload, Save, User, Camera } from "lucide-react"
+import { Upload, Save, User, Mail, Camera } from "lucide-react"
 
 interface ProfilePageProps {
   user: any
-  onBack: () => void
+  onUserUpdate?: (user: any) => void
 }
 
-export function ProfilePage({ user, onBack }: ProfilePageProps) {
+export function ProfilePage({ user, onUserUpdate }: ProfilePageProps) {
   const [name, setName] = useState(user?.name || "")
-  const [profileImage, setProfileImage] = useState<File | null>(null)
-  const [profileImageUrl, setProfileImageUrl] = useState(user?.profileImageUrl || "")
-  const [previewUrl, setPreviewUrl] = useState("")
+  const [email, setEmail] = useState(user?.email || "")
+  const [profileImage, setProfileImage] = useState(user?.profileImage || "")
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
-  const [uploads, setUploads] = useState([])
-  const [uploadsLoading, setUploadsLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [uploads, setUploads] = useState<any[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchUserUploads()
-  }, [])
+    if (user) {
+      setName(user.name || "")
+      setEmail(user.email || "")
+      setProfileImage(user.profileImage || "")
+      fetchUserUploads()
+    }
+  }, [user])
 
   const fetchUserUploads = async () => {
     try {
-      const sessionToken =
-        localStorage.getItem("sessionToken") || localStorage.getItem("session") || getCookie("sessionToken")
-
-      if (!sessionToken) {
-        setUploadsLoading(false)
-        return
-      }
+      setLoading(true)
+      const sessionToken = localStorage.getItem("sessionToken")
 
       const response = await fetch("/api/profile/uploads", {
         headers: {
           Authorization: `Bearer ${sessionToken}`,
-          Cookie: `sessionToken=${sessionToken}`,
+          "x-session-token": sessionToken || "",
         },
       })
 
@@ -56,53 +57,47 @@ export function ProfilePage({ user, onBack }: ProfilePageProps) {
     } catch (error) {
       console.error("Error fetching uploads:", error)
     } finally {
-      setUploadsLoading(false)
+      setLoading(false)
     }
-  }
-
-  const getCookie = (name: string) => {
-    if (typeof document === "undefined") return null
-    const value = `; ${document.cookie}`
-    const parts = value.split(`; ${name}=`)
-    if (parts.length === 2) return parts.pop()?.split(";").shift()
-    return null
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setProfileImage(file)
-      const url = URL.createObjectURL(file)
-      setPreviewUrl(url)
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
     }
   }
 
   const handleSave = async () => {
-    setLoading(true)
-    setError("")
-    setSuccess("")
-
     try {
-      const sessionToken =
-        localStorage.getItem("sessionToken") || localStorage.getItem("session") || getCookie("sessionToken")
+      setSaving(true)
+      setError(null)
+      setSuccess(null)
 
+      const sessionToken = localStorage.getItem("sessionToken")
       if (!sessionToken) {
-        setError("Please log in again")
-        setLoading(false)
+        setError("No session token found. Please log in again.")
         return
       }
 
       const formData = new FormData()
       formData.append("name", name)
-      if (profileImage) {
-        formData.append("profileImage", profileImage)
+      formData.append("email", email)
+
+      if (imageFile) {
+        formData.append("profileImage", imageFile)
       }
 
       const response = await fetch("/api/profile", {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${sessionToken}`,
-          Cookie: `sessionToken=${sessionToken}`,
+          "x-session-token": sessionToken,
         },
         body: formData,
       })
@@ -111,133 +106,190 @@ export function ProfilePage({ user, onBack }: ProfilePageProps) {
 
       if (response.ok) {
         setSuccess("Profile updated successfully!")
-        if (data.profileImageUrl) {
-          setProfileImageUrl(data.profileImageUrl)
+        setProfileImage(data.user.profileImage || "")
+        setImageFile(null)
+        setImagePreview(null)
+
+        // Update user data in parent component
+        if (onUserUpdate) {
+          onUserUpdate(data.user)
         }
-        // Clear the preview
-        setPreviewUrl("")
-        setProfileImage(null)
+
+        // Refresh uploads
+        fetchUserUploads()
       } else {
         setError(data.error || "Failed to update profile")
       }
     } catch (error) {
-      console.error("Profile update error:", error)
-      setError("Failed to update profile")
+      console.error("Error updating profile:", error)
+      setError("An error occurred while updating your profile")
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+  }
+
   return (
-    <div className="main-container">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-6">
-          <Button onClick={onBack} variant="outline">
-            ← Back to Gallery
-          </Button>
-        </div>
+    <div className="max-w-4xl mx-auto p-6 space-y-8">
+      {/* Profile Header */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Profile Settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Profile Image Section */}
+          <div className="flex flex-col items-center space-y-4">
+            <Avatar className="h-32 w-32">
+              <AvatarImage src={imagePreview || profileImage || ""} alt={name} />
+              <AvatarFallback className="text-2xl">
+                {name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Profile Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Profile Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Profile Image */}
-              <div className="text-center">
-                <div className="relative inline-block">
-                  <Avatar className="h-24 w-24 mx-auto">
-                    <AvatarImage src={previewUrl || profileImageUrl} alt={name || "Profile"} />
-                    <AvatarFallback className="text-lg">{name ? name.charAt(0).toUpperCase() : "U"}</AvatarFallback>
-                  </Avatar>
-                  <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/90 transition-colors">
-                    <Camera className="h-4 w-4" />
-                    <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                  </label>
+            <div className="flex flex-col items-center space-y-2">
+              <Label htmlFor="profile-image" className="cursor-pointer">
+                <div className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+                  <Camera className="h-4 w-4" />
+                  Change Photo
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Click the camera icon to change your profile picture
-                </p>
-              </div>
-
-              {/* Name */}
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
-              </div>
-
-              {/* Email (read-only) */}
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" value={user?.email || ""} disabled className="bg-muted" />
-                <p className="text-xs text-muted-foreground">Email cannot be changed</p>
-              </div>
-
-              {/* Error/Success Messages */}
-              {error && <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm">{error}</div>}
-              {success && <div className="bg-green-50 text-green-700 p-3 rounded-md text-sm">{success}</div>}
-
-              {/* Save Button */}
-              <Button onClick={handleSave} disabled={loading} className="w-full">
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Upload History */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
-                Your Uploads
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {uploadsLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-                  <p className="text-muted-foreground">Loading uploads...</p>
-                </div>
-              ) : uploads.length === 0 ? (
-                <div className="text-center py-8">
-                  <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No uploads yet</p>
-                  <p className="text-sm text-muted-foreground mt-2">Photos you upload will appear here</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {uploads.map((upload: any) => (
-                    <div key={upload.id} className="relative group">
-                      <img
-                        src={upload.url || "/placeholder.svg"}
-                        alt={upload.caption || "Upload"}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                        <p className="text-white text-xs text-center px-2">{upload.caption || "No caption"}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <Input
+                  id="profile-image"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </Label>
+              {imagePreview && (
+                <p className="text-sm text-muted-foreground">New image selected - click Save to update</p>
               )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </div>
+          </div>
+
+          {/* Form Fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your full name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+              />
+            </div>
+          </div>
+
+          {/* Error/Success Messages */}
+          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">{error}</div>}
+          {success && <div className="text-green-600 text-sm bg-green-50 p-3 rounded-md">{success}</div>}
+
+          {/* Save Button */}
+          <Button onClick={handleSave} disabled={saving} className="w-full md:w-auto">
+            {saving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Account Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Account Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Account Type</Label>
+              <p className="text-sm capitalize">{user?.role || "User"}</p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Member Since</Label>
+              <p className="text-sm">{user?.createdAt ? formatDate(user.createdAt) : "Unknown"}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Upload History */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Your Uploads ({uploads.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : uploads.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {uploads.map((upload) => (
+                <div key={upload.id} className="space-y-2">
+                  <div className="aspect-square rounded-lg overflow-hidden bg-muted">
+                    <img
+                      src={upload.image_url || "/placeholder.svg"}
+                      alt={upload.comment || "Upload"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    {upload.comment && <p className="text-sm text-muted-foreground line-clamp-2">{upload.comment}</p>}
+                    <p className="text-xs text-muted-foreground">
+                      {upload.created_at ? formatDate(upload.created_at) : "Unknown date"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No uploads yet</p>
+              <p className="text-sm text-muted-foreground">Share your first memory to get started</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

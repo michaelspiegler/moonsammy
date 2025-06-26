@@ -15,64 +15,60 @@ export async function POST(request: NextRequest) {
 
     // Find user by email
     const users = await sql`
-      SELECT id, email, name, password_hash, role, profile_image_url, created_at
+      SELECT id, name, email, password, role, profile_image 
       FROM users 
-      WHERE email = ${email.toLowerCase()}
+      WHERE email = ${email}
     `
 
     if (users.length === 0) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
     const user = users[0]
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash)
+    const isValidPassword = await bcrypt.compare(password, user.password)
     if (!isValidPassword) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
     // Generate session token
     const sessionToken = uuidv4()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-    // Create session
+    // Store session in database
     await sql`
       INSERT INTO user_sessions (user_id, session_token, expires_at)
       VALUES (${user.id}, ${sessionToken}, ${expiresAt})
       ON CONFLICT (user_id) 
-      DO UPDATE SET 
-        session_token = ${sessionToken},
-        expires_at = ${expiresAt},
-        updated_at = CURRENT_TIMESTAMP
+      DO UPDATE SET session_token = ${sessionToken}, expires_at = ${expiresAt}
     `
 
     // Log activity
     await sql`
       INSERT INTO admin_logs (action, details, user_id, created_at)
-      VALUES ('user_login', ${JSON.stringify({ email, user_id: user.id })}, ${user.id}, CURRENT_TIMESTAMP)
+      VALUES ('user_login', ${JSON.stringify({ email, ip: request.ip })}, ${user.id}, NOW())
     `
 
-    // Prepare user data (exclude password)
     const userData = {
       id: user.id,
-      email: user.email,
       name: user.name,
+      email: user.email,
       role: user.role,
-      profileImageUrl: user.profile_image_url,
-      createdAt: user.created_at,
+      profileImage: user.profile_image,
+      sessionToken,
     }
 
-    // Create response with user data and session token
+    // Create response with user data
     const response = NextResponse.json({
-      success: true,
       user: userData,
-      sessionToken: sessionToken,
+      sessionToken,
+      message: "Login successful",
     })
 
     // Set multiple cookies for compatibility
     response.cookies.set("sessionToken", sessionToken, {
-      httpOnly: false, // Allow JavaScript access
+      httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours
@@ -83,7 +79,7 @@ export async function POST(request: NextRequest) {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 24 * 60 * 60,
+      maxAge: 24 * 60 * 60, // 24 hours
       path: "/",
     })
 
@@ -91,7 +87,7 @@ export async function POST(request: NextRequest) {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 24 * 60 * 60,
+      maxAge: 24 * 60 * 60, // 24 hours
       path: "/",
     })
 
