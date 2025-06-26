@@ -6,12 +6,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { LucideUser, Mail, Lock, Save, X } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { LucideUser, Mail, Lock, Save, X, Shield } from "lucide-react"
 
 interface UserType {
   id: string
   name: string
   email: string
+  role?: string
   profileImage?: string
   createdAt: string
   updatedAt: string
@@ -32,6 +34,7 @@ export function AdminUserForm({ user, onSuccess, onCancel }: AdminUserFormProps)
     name: user?.name || "",
     email: user?.email || "",
     password: "",
+    role: user?.role || "Member",
   })
 
   const isEditing = !!user
@@ -48,6 +51,7 @@ export function AdminUserForm({ user, onSuccess, onCancel }: AdminUserFormProps)
       const body: any = {
         name: formData.name,
         email: formData.email,
+        role: formData.role,
       }
 
       // Only include password if it's provided
@@ -124,6 +128,25 @@ export function AdminUserForm({ user, onSuccess, onCancel }: AdminUserFormProps)
           className="mt-1 font-light"
           required
         />
+      </div>
+
+      <div>
+        <Label htmlFor="role" className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+          <Shield className="h-4 w-4" />
+          <span>Role</span>
+        </Label>
+        <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+          <SelectTrigger className="mt-1">
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Member">Member</SelectItem>
+            <SelectItem value="Admin">Admin</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-gray-500 mt-1">
+          {formData.role === "Admin" ? "Can access admin settings and manage users" : "Standard user access"}
+        </p>
       </div>
 
       <div>

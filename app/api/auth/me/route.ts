@@ -20,22 +20,6 @@ export async function GET(request: NextRequest) {
       "🔍 Auth me: All cookies:",
       Object.fromEntries(request.cookies.getAll().map((c) => [c.name, c.value?.substring(0, 20) + "..."])),
     )
-    console.log(
-      "🔍 Auth me: Session from 'session' cookie:",
-      sessionFromCookie ? sessionFromCookie.substring(0, 20) + "..." : "missing",
-    )
-    console.log(
-      "🔍 Auth me: Session from 'auth-session' cookie:",
-      sessionFromAuthCookie ? sessionFromAuthCookie.substring(0, 20) + "..." : "missing",
-    )
-    console.log(
-      "🔍 Auth me: Session from 'user-session' cookie:",
-      sessionFromUserCookie ? sessionFromUserCookie.substring(0, 20) + "..." : "missing",
-    )
-    console.log(
-      "🔍 Auth me: Session from header:",
-      sessionFromHeader ? sessionFromHeader.substring(0, 20) + "..." : "missing",
-    )
 
     const sessionId = sessionFromCookie || sessionFromAuthCookie || sessionFromUserCookie || sessionFromHeader
 
@@ -48,9 +32,9 @@ export async function GET(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Get user from session and clean up expired sessions
+    // Get user from session including role and clean up expired sessions
     const sessions = await sql`
-      SELECT u.id, u.name, u.email, u.profile_image_url, s.expires_at, s.id as session_id
+      SELECT u.id, u.name, u.email, u.profile_image_url, u.role, s.expires_at, s.id as session_id
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.id = ${sessionId}
@@ -69,11 +53,6 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 Auth me: Session expires at:", expiresAt.toISOString())
     console.log("🔍 Auth me: Current time:", now.toISOString())
-    console.log(
-      "🔍 Auth me: Time until expiry:",
-      Math.round((expiresAt.getTime() - now.getTime()) / 1000 / 60),
-      "minutes",
-    )
 
     if (expiresAt <= now) {
       console.log("🔍 Auth me: Session expired, cleaning up")
@@ -95,42 +74,36 @@ export async function GET(request: NextRequest) {
       `
     }
 
-    console.log("🔍 Auth me: Valid session found for user:", session.name)
+    console.log("🔍 Auth me: Valid session found for user:", session.name, "with role:", session.role)
 
-    // Valid session - return user data and FORCE set cookies
+    // Valid session - return user data including role
     const userData = {
       user: {
         id: session.id,
         name: session.name,
         email: session.email,
+        role: session.role || "Member", // Default to Member if role is null
         profileImage: session.profile_image_url,
-        sessionToken: sessionId, // Include session token in response
+        sessionToken: sessionId,
       },
     }
 
     const response = NextResponse.json(userData)
 
-    // FORCE set session cookies with aggressive settings
+    // Set session cookies
     const cookieOptions = {
       httpOnly: false,
-      secure: false, // Keep false for development
+      secure: false,
       sameSite: "lax" as const,
       path: "/",
       maxAge: 30 * 24 * 60 * 60, // 30 days
     }
 
-    // Set multiple cookie names for redundancy with FORCE
     response.cookies.set("session", sessionId, cookieOptions)
     response.cookies.set("auth-session", sessionId, cookieOptions)
     response.cookies.set("user-session", sessionId, cookieOptions)
 
-    // Also set a backup cookie with different settings
-    response.cookies.set("backup-session", sessionId, {
-      ...cookieOptions,
-      httpOnly: true, // Try httpOnly version too
-    })
-
-    console.log("🔍 Auth me: Returning user data with FORCED cookies")
+    console.log("🔍 Auth me: Returning user data with role:", session.role)
     return response
   } catch (error) {
     console.error("🔍 Auth me: Error during auth check:", error)

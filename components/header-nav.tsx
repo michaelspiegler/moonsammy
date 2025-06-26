@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { User, LogOut, Settings, UserPlus, ChevronDown } from "lucide-react"
+import { User, LogOut, Settings, UserPlus, ChevronDown, Shield } from "lucide-react"
 import { AuthModal } from "./auth-modal"
 import Link from "next/link"
 
@@ -12,6 +12,7 @@ interface UserType {
   id: string
   name: string
   email: string
+  role?: string
   profileImage?: string
 }
 
@@ -34,7 +35,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
   useEffect(() => {
     console.log("Header: prop user changed to:", propUser)
     setUser(propUser || null)
-    setImageError(false) // Reset image error when user changes
+    setImageError(false)
   }, [propUser])
 
   useEffect(() => {
@@ -105,13 +106,19 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
     }
   }
 
+  const handleAdminSettings = () => {
+    console.log("🔍 Admin Settings clicked")
+    setShowDropdown(false)
+    router.push("/admin")
+  }
+
   const handleAuthSuccess = async (userData: UserType) => {
     console.log("Header auth success:", userData)
     setUser(userData)
     onAuthChange?.(userData)
     onSuccess?.(userData)
     setShowAuthModal(false)
-    setImageError(false) // Reset image error for new user
+    setImageError(false)
     console.log("Header auth completed, user set to:", userData)
   }
 
@@ -141,6 +148,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
   }
 
   const currentUser = user || propUser
+  const isAdmin = currentUser?.role === "Admin"
 
   return (
     <div className="flex items-center justify-end">
@@ -164,7 +172,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
                     height={32}
                     className="rounded-full object-cover w-full h-full"
                     onError={handleImageError}
-                    unoptimized // Prevent Next.js optimization issues in production
+                    unoptimized
                   />
                 ) : (
                   <User className="h-4 w-4 text-gray-600" />
@@ -185,6 +193,7 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
                 <div className="p-3 border-b border-gray-100">
                   <p className="font-medium text-gray-800">{currentUser.name}</p>
                   <p className="text-sm text-gray-500 truncate">{currentUser.email}</p>
+                  <p className="text-xs text-blue-600 font-medium mt-1">{currentUser.role || "Member"}</p>
                 </div>
 
                 <div className="py-1">
@@ -195,6 +204,17 @@ export function HeaderNav({ user: propUser, onAuthChange, onSuccess, showButtonO
                     <Settings className="mr-2 h-4 w-4" />
                     Profile/Settings
                   </button>
+
+                  {/* Show Admin Settings only for Admin users */}
+                  {isAdmin && (
+                    <button
+                      onClick={handleAdminSettings}
+                      className="flex items-center w-full px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 transition-colors"
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Admin Settings
+                    </button>
+                  )}
 
                   <div className="border-t border-gray-100 my-1" />
 

@@ -1,8 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import bcrypt from "bcryptjs"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 })
@@ -37,51 +37,50 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12)
 
-    // Create user
+    // Create user with Member role by default
     const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     await sql`
-      INSERT INTO users (id, name, email, password_hash, created_at, updated_at)
-      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase().trim()}, ${passwordHash}, NOW(), NOW())
+      INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
+      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase().trim()}, ${passwordHash}, 'Member', NOW(), NOW())
     `
 
     // Create session
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    const expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
     await sql`
       INSERT INTO user_sessions (id, user_id, expires_at, created_at)
-      VALUES (${sessionId}, ${userId}, ${expiresAt.toISOString()}, NOW())
+      VALUES (${sessionId}, ${userId}, ${expiryDate.toISOString()}, NOW())
     `
 
-    console.log("🍪 Setting session cookie:", sessionId)
-
-    // Create response with user data AND session token
     const response = NextResponse.json({
       success: true,
-      sessionToken: sessionId, // Include session token in response
-      user: { id: userId, name: name.trim(), email: email.toLowerCase().trim() },
+      user: {
+        id: userId,
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        role: "Member",
+        profileImage: null,
+      },
     })
 
-    // Set cookies with more persistent settings
+    // Set session cookies
     const cookieOptions = {
-      httpOnly: false, // Allow JavaScript access for debugging
-      secure: false, // Set to false for development, true for production
-      sameSite: "lax" as const, // More permissive for navigation
+      httpOnly: false,
+      secure: false,
+      sameSite: "lax" as const,
       path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
+      maxAge: 30 * 24 * 60 * 60, // 30 days
     }
 
-    // Set multiple cookies for redundancy
     response.cookies.set("session", sessionId, cookieOptions)
     response.cookies.set("auth-session", sessionId, cookieOptions)
     response.cookies.set("user-session", sessionId, cookieOptions)
 
-    console.log("🍪 Set cookies with options:", cookieOptions)
-
     return response
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json({ error: "Registration failed" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create account" }, { status: 500 })
   }
 }
