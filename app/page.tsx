@@ -2,183 +2,152 @@
 
 import { useState, useEffect } from "react"
 import { PhotoGallery } from "@/components/photo-gallery"
-import { InstagramFeed } from "@/components/instagram-feed"
 import { UploadSection } from "@/components/upload-section"
-import { HeaderNav } from "@/components/header-nav"
 import { ViewToggle } from "@/components/view-toggle"
 import { SlideshowView } from "@/components/slideshow-view"
-import { PhotoFilter } from "@/components/photo-filter"
 import { ThemeSelector } from "@/components/theme-selector"
-import { DownloadSection } from "@/components/download-section"
+import { HeaderNav } from "@/components/header-nav"
+import { AuthModal } from "@/components/auth-modal"
 import Image from "next/image"
 
-interface UserType {
-  id: string
-  name: string
-  email: string
-  role?: string
-  profileImage?: string
-  sessionToken?: string
-}
-
 export default function Home() {
-  const [user, setUser] = useState<UserType | null>(null)
+  const [view, setView] = useState<"gallery" | "slideshow">("gallery")
+  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [currentView, setCurrentView] = useState<"gallery" | "feed" | "slideshow">("gallery")
-  const [filters, setFilters] = useState({
-    year: "",
-    tags: [] as string[],
-    searchTerm: "",
-  })
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   useEffect(() => {
-    checkAuthStatus()
+    checkAuth()
   }, [])
 
-  const checkAuthStatus = async () => {
+  const checkAuth = async () => {
     try {
-      console.log("🔍 Main: Checking auth status...")
-      const response = await fetch("/api/auth/me", {
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-        },
-      })
-      const data = await response.json()
-      console.log("🔍 Main: Auth check result:", data?.user?.name, "role:", data?.user?.role)
-      if (data.user) {
-        setUser(data.user)
-      } else {
-        setUser(null)
+      const response = await fetch("/api/auth/me")
+      if (response.ok) {
+        const userData = await response.json()
+        setUser(userData)
       }
     } catch (error) {
-      console.error("🔍 Main: Auth check failed:", error)
-      setUser(null)
+      console.error("Auth check failed:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleAuthChange = (userData: UserType | null) => {
-    console.log("🔍 Main: Auth changed to:", userData?.name || "null", "role:", userData?.role)
+  const handleAuthSuccess = (userData: any) => {
     setUser(userData)
+    setShowAuthModal(false)
+  }
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+      setUser(null)
+    } catch (error) {
+      console.error("Logout failed:", error)
+    }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-[#D4AF37] font-serif">Loading...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-600 mb-4"></div>
+          <p className="text-gray-500 font-light">Loading...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="main-container">
-      {/* Header with Navigation - Fixed positioning with high z-index */}
-      <header className="fixed top-0 left-0 right-0 bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 z-[999998]">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-[#D4AF37] font-serif">Brian Quain Memorial</h1>
+    <div className="min-h-screen bg-background">
+      {/* Fixed Header */}
+      <header className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-b border-border z-[999998]">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center space-x-4">
+            <Image
+              src="/images/brian-portrait.png"
+              alt="Brian Quain"
+              width={40}
+              height={40}
+              className="rounded-full border-2 border-gray-300"
+            />
+            <div>
+              <h1 className="text-xl font-serif text-gray-800">Brian Quain Memorial</h1>
+              <p className="text-sm text-gray-600 font-light">Celebrating a life well lived</p>
             </div>
+          </div>
 
-            {/* Header Navigation with proper z-index */}
-            <div className="relative z-[999999]">
-              <HeaderNav user={user} onAuthChange={handleAuthChange} />
-            </div>
+          <div className="header-nav-container z-[999999]">
+            <HeaderNav user={user} onLogout={handleLogout} onAuthClick={() => setShowAuthModal(true)} />
           </div>
         </div>
       </header>
 
-      {/* Main Content - Add top padding to account for fixed header */}
+      {/* Main Content */}
       <main className="pt-20">
-        {user ? (
-          <>
-            {/* Memorial Header */}
-            <div className="memorial-header-layout container mx-auto px-4 py-8">
-              <div className="text-center space-y-6">
-                <div className="relative w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-[#D4AF37] shadow-2xl">
-                  <Image src="/images/brian-portrait.png" alt="Brian Quain" fill className="object-cover" priority />
-                </div>
-                <div>
-                  <h1 className="memorial-title text-4xl md:text-5xl text-[#D4AF37] mb-4">Remembering Brian Quain</h1>
-                  <p className="text-lg text-[#D4AF37]/80 max-w-2xl mx-auto font-serif leading-relaxed">
-                    A celebration of life, memories, and the lasting impact of a remarkable person. Share your photos,
-                    stories, and keep his memory alive.
-                  </p>
+        <div className="container mx-auto px-4 py-8">
+          {!user ? (
+            // Not logged in - show sign in prompt
+            <div className="text-center py-20">
+              <div className="max-w-md mx-auto bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg p-8 shadow-lg">
+                <Image
+                  src="/images/brian-portrait.png"
+                  alt="Brian Quain"
+                  width={80}
+                  height={80}
+                  className="rounded-full border-2 border-gray-300 mx-auto mb-6"
+                />
+                <h2 className="text-2xl font-serif text-gray-800 mb-4">Welcome to Brian's Memorial</h2>
+                <p className="text-gray-600 font-light mb-6">Sign in to view and share memories of Brian Quain</p>
+
+                <div className="header-nav-container z-[999999]">
+                  <HeaderNav
+                    user={user}
+                    onLogout={handleLogout}
+                    onAuthClick={() => setShowAuthModal(true)}
+                    showAsButton={true}
+                  />
                 </div>
               </div>
             </div>
+          ) : (
+            // Logged in - show main content
+            <>
+              {/* Header Section */}
+              <div className="text-center mb-12">
+                <div className="flex justify-center mb-6">
+                  <Image
+                    src="/images/brian-portrait.png"
+                    alt="Brian Quain"
+                    width={120}
+                    height={120}
+                    className="rounded-full border-4 border-gray-300 shadow-lg"
+                  />
+                </div>
+                <h1 className="text-4xl md:text-5xl font-serif text-gray-800 mb-4">Remembering Brian Quain</h1>
+                <p className="text-xl text-gray-600 font-light max-w-2xl mx-auto mb-8">
+                  A celebration of life, love, and the memories we shared together
+                </p>
 
-            {/* Controls Section */}
-            <div className="container mx-auto px-4 mb-8">
-              <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  <ViewToggle currentView={currentView} onViewChange={setCurrentView} />
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+                  <ViewToggle view={view} onViewChange={setView} />
                   <ThemeSelector />
                 </div>
-                <PhotoFilter filters={filters} onFiltersChange={setFilters} />
-              </div>
-            </div>
-
-            {/* Content based on current view */}
-            <div className="container mx-auto px-4">
-              {currentView === "gallery" && <PhotoGallery filters={filters} />}
-              {currentView === "feed" && <InstagramFeed filters={filters} />}
-              {currentView === "slideshow" && <SlideshowView filters={filters} />}
-            </div>
-
-            {/* Upload Section */}
-            <div className="container mx-auto px-4 py-12">
-              <UploadSection user={user} onUploadSuccess={() => window.location.reload()} />
-            </div>
-
-            {/* Download Section */}
-            <div className="container mx-auto px-4 py-8">
-              <DownloadSection />
-            </div>
-          </>
-        ) : (
-          /* Sign-in Required Section */
-          <div className="container mx-auto px-4 py-16">
-            <div className="max-w-2xl mx-auto text-center space-y-8">
-              {/* Memorial Header for non-authenticated users */}
-              <div className="space-y-6">
-                <div className="relative w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-[#D4AF37] shadow-2xl">
-                  <Image src="/images/brian-portrait.png" alt="Brian Quain" fill className="object-cover" priority />
-                </div>
-                <div>
-                  <h1 className="memorial-title text-4xl md:text-5xl text-[#D4AF37] mb-4 font-serif">
-                    Remembering Brian Quain
-                  </h1>
-                  <p className="text-lg text-[#D4AF37]/80 max-w-2xl mx-auto font-serif leading-relaxed">
-                    A celebration of life, memories, and the lasting impact of a remarkable person.
-                  </p>
-                </div>
               </div>
 
-              {/* Sign in to continue block */}
-              <div className="bg-[#222222] border border-[#333333] rounded-lg p-8 space-y-6">
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-semibold text-[#D4AF37] font-serif">Sign in to continue</h2>
-                  <p className="text-[#D4AF37]/80 font-serif">
-                    Please create an account or sign in to view and share memories of Brian.
-                  </p>
-                </div>
+              {/* Upload Section */}
+              <UploadSection onUploadSuccess={() => window.location.reload()} />
 
-                {/* Sign-in button with proper z-index */}
-                <div className="relative z-[999999]">
-                  <HeaderNav user={user} onAuthChange={handleAuthChange} showButtonOnly={true} />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+              {/* Content based on view */}
+              {view === "gallery" ? <PhotoGallery /> : <SlideshowView />}
+            </>
+          )}
+        </div>
       </main>
+
+      {/* Auth Modal */}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} />
     </div>
   )
 }
