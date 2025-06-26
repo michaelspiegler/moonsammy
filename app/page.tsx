@@ -1,229 +1,230 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { InstagramFeed } from "@/components/instagram-feed"
 import { UploadSection } from "@/components/upload-section"
 import { DownloadSection } from "@/components/download-section"
 import { ViewToggle } from "@/components/view-toggle"
 import { HeaderNav } from "@/components/header-nav"
-import { useTheme } from "@/components/theme-provider"
+import { AuthModal } from "@/components/auth-modal"
+import Image from "next/image"
+
+interface User {
+  id: string
+  name: string
+  email: string
+  role: string
+  profileImage?: string
+  sessionToken?: string
+}
 
 export default function Home() {
-  const [user, setUser] = useState<any>(null)
-  const [authChecked, setAuthChecked] = useState(false)
-  const { theme } = useTheme()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
-  // Check auth status on mount and after any potential session changes
   useEffect(() => {
-    const checkInitialAuth = async () => {
-      try {
-        console.log("🔍 Main page: Starting initial auth check...")
-
-        // Get session token from localStorage as backup
-        const sessionToken = localStorage.getItem("sessionToken")
-        console.log("🔍 Main page: Session token from localStorage:", sessionToken ? "exists" : "missing")
-
-        const headers: HeadersInit = {
-          "Content-Type": "application/json",
-        }
-        if (sessionToken) {
-          headers["x-session-token"] = sessionToken
-        }
-
-        const response = await fetch("/api/auth/me", {
-          credentials: "include",
-          cache: "no-store", // Prevent caching
-          headers,
-        })
-
-        console.log("🔍 Main page: Auth response status:", response.status)
-
-        const data = await response.json()
-        console.log("🔍 Main page: Auth response data:", data)
-
-        if (data.user) {
-          console.log("🔍 Main page: Initial auth check found user:", data.user.name)
-          setUser(data.user)
-        } else {
-          console.log("🔍 Main page: Initial auth check: no user found")
-          setUser(null)
-        }
-      } catch (error) {
-        console.error("🔍 Main page: Initial auth check failed:", error)
-        setUser(null)
-      } finally {
-        setAuthChecked(true)
-      }
-    }
-
-    checkInitialAuth()
-
-    // Also check auth when the page becomes visible (handles tab switching)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        console.log("🔍 Main page: Page became visible, rechecking auth...")
-        checkInitialAuth()
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
-    }
+    checkAuth()
   }, [])
 
-  const handleAuthChange = (userData: any) => {
-    console.log("🔍 Main page: Auth change received:", userData?.name || "null")
-    setUser(userData)
+  const checkAuth = async () => {
+    try {
+      console.log("🔍 Home: Checking authentication...")
 
-    // Store session token if provided
-    if (userData && userData.sessionToken) {
-      localStorage.setItem("sessionToken", userData.sessionToken)
-      console.log("🔍 Main page: Stored session token in localStorage")
-    } else if (!userData) {
+      const sessionToken = localStorage.getItem("sessionToken")
+      const headers: HeadersInit = {}
+
+      if (sessionToken) {
+        headers["x-session-token"] = sessionToken
+      }
+
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+        headers,
+      })
+
+      const data = await response.json()
+      console.log("🔍 Home: Auth response:", data)
+
+      if (data.user) {
+        setUser(data.user)
+        // Store session token if provided
+        if (data.user.sessionToken) {
+          localStorage.setItem("sessionToken", data.user.sessionToken)
+        }
+      } else {
+        setUser(null)
+        localStorage.removeItem("sessionToken")
+      }
+    } catch (error) {
+      console.error("🔍 Home: Auth check failed:", error)
+      setUser(null)
       localStorage.removeItem("sessionToken")
-      console.log("🔍 Main page: Removed session token from localStorage")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleUserChange = (userData: any) => {
-    console.log("🔍 Main page: User change from feed:", userData?.name || "null")
+  const handleAuthSuccess = (userData: User) => {
+    console.log("🔍 Home: Auth success:", userData)
     setUser(userData)
+    setShowAuthModal(false)
+
+    // Store session token
+    if (userData.sessionToken) {
+      localStorage.setItem("sessionToken", userData.sessionToken)
+    }
   }
 
-  const handleAuthSuccess = (userData: any) => {
-    console.log("🔍 Main page: Auth success callback:", userData?.name || "null")
-    handleAuthChange(userData)
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
+    } catch (error) {
+      console.error("Logout error:", error)
+    } finally {
+      setUser(null)
+      localStorage.removeItem("sessionToken")
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen theme-bg flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-600 mb-4"></div>
+          <p className="text-gray-600 font-light">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="main-container theme-bg">
-      {/* Scattered decorative dots - hidden in memorial theme */}
-      <div className="decorative-dots fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-4 h-4 rounded-full bg-red-400"></div>
-        <div className="absolute top-32 right-32 w-3 h-3 rounded-full bg-blue-500"></div>
-        <div className="absolute top-64 left-1/4 w-5 h-5 rounded-full bg-green-500"></div>
-        <div className="absolute bottom-40 right-20 w-4 h-4 rounded-full bg-yellow-500"></div>
-        <div className="absolute bottom-32 left-16 w-3 h-3 rounded-full bg-pink-400"></div>
-        <div className="absolute top-1/2 right-1/4 w-4 h-4 rounded-full bg-orange-400"></div>
-        <div className="absolute bottom-64 left-1/3 w-3 h-3 rounded-full bg-purple-400"></div>
+    <div className="min-h-screen theme-bg">
+      {/* Fixed Header */}
+      <div className="header-nav-container">
+        <header className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-b border-gray-200 z-[999998]">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Image
+                  src="/images/brian-portrait.png"
+                  alt="Brian Quain"
+                  width={40}
+                  height={40}
+                  className="rounded-full"
+                />
+                <div>
+                  <h1 className="text-lg font-semibold text-gray-900 font-serif">Brian Quain Memorial</h1>
+                  <p className="text-sm text-gray-600 font-light">Celebrating a life well lived</p>
+                </div>
+              </div>
+              <HeaderNav user={user} onLogin={() => setShowAuthModal(true)} onLogout={handleLogout} />
+            </div>
+          </div>
+        </header>
       </div>
 
-      {/* Header with Navigation */}
-      <header className="relative z-10 pt-8 pb-4">
-        <div className="container mx-auto px-6">
-          <div className="flex items-center justify-between mb-8">
-            <div></div> {/* Spacer */}
-            <HeaderNav user={user} onAuthChange={handleAuthChange} />
-          </div>
-
-          {theme === "memorial" ? (
-            // Memorial theme: Elegant header layout
-            <div className="memorial-header-layout flex items-center justify-center min-h-[400px] px-8">
-              <div className="flex items-center gap-12 max-w-6xl w-full">
-                {/* Left side: Portrait */}
-                <div className="flex-shrink-0">
-                  <img
-                    src="/images/brian-memorial-flyer.jpg"
-                    alt="Brian Quain"
-                    className="w-80 h-80 object-cover object-center rounded-lg shadow-2xl"
-                  />
-                  <div className="text-center mt-4 text-sm text-gray-400 font-light">YOU'LL NEVER WALK ALONE</div>
-                </div>
-
-                {/* Right side: Typography */}
-                <div className="flex-1 text-center">
-                  <h1 className="memorial-title text-8xl font-bold text-yellow-400 mb-6 leading-none">
-                    BRIAN
-                    <br />
-                    QUAIN
-                  </h1>
-                  <div className="text-yellow-400 text-lg mb-8 font-light tracking-wider">
-                    Jan 19th 1975 — June 13th 2025
-                  </div>
-                  <h2 className="text-2xl text-white mb-6 font-light">A Celebration of Life in Photos</h2>
-                  <div className="text-gray-300 text-lg leading-relaxed max-w-md mx-auto">
-                    <p className="mb-4">Share your memories, stories, and photos of Brian</p>
-                    <p>Keep his spirit alive through the moments we shared</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            // Other themes: Original layout
-            <div className="text-center">
-              <div className="mb-6">
-                <img
-                  src="/images/brian-portrait.png"
-                  alt="Brian Quain - Cartoon Portrait"
-                  className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto shadow-lg border-4 border-white"
-                />
-              </div>
-              <h1 className="text-4xl md:text-6xl font-light text-gray-800 mb-4 tracking-wide">brian quain</h1>
-              <p className="text-lg md:text-xl text-gray-600 mb-8 font-light">you'll never walk alone</p>
-              <div className="w-24 h-px bg-gray-300 mx-auto"></div>
-            </div>
-          )}
-        </div>
-      </header>
-
       {/* Main Content */}
-      <main className="relative z-10 container mx-auto px-6 space-y-20">
-        {!authChecked ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-gray-300 border-t-gray-600"></div>
-            <p className="mt-2 text-gray-500 font-light text-sm">checking authentication...</p>
-          </div>
-        ) : !user ? (
-          <div className="max-w-2xl mx-auto mb-12 p-6 bg-card border border-border rounded-lg text-center">
-            <h3 className="text-xl font-light text-foreground mb-2">Sign in to continue</h3>
-            <p className="text-muted-foreground mb-4 font-light">
-              All features require an account for security and attribution
-            </p>
-            <div className="flex justify-center">
-              <HeaderNav
-                user={user}
-                onAuthChange={handleAuthChange}
-                onSuccess={handleAuthSuccess}
-                showButtonOnly={true}
-              />
+      <main className="pt-20">
+        {!user ? (
+          // Not logged in - show memorial intro
+          <div className="container mx-auto px-6 py-12">
+            {/* Memorial Header */}
+            <div className="text-center mb-16">
+              <div className="flex flex-col lg:flex-row items-center justify-center gap-12 mb-12">
+                <div className="flex-shrink-0">
+                  <Image
+                    src="/images/brian-portrait.png"
+                    alt="Brian Quain"
+                    width={300}
+                    height={300}
+                    className="rounded-full shadow-2xl"
+                  />
+                </div>
+                <div className="text-center lg:text-left max-w-2xl">
+                  <h1 className="text-5xl lg:text-6xl font-light text-gray-800 mb-6 font-serif">
+                    Remembering Brian Quain
+                  </h1>
+                  <p className="text-xl text-gray-600 mb-8 font-light leading-relaxed">
+                    A celebration of Brian's life through the memories, photos, and stories shared by those who knew and
+                    loved him.
+                  </p>
+                  <div className="space-y-4">
+                    <p className="text-lg text-gray-700 font-light">
+                      Join us in honoring Brian's memory by sharing your photos and stories.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sign in to continue */}
+              <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-8 max-w-md mx-auto border border-gray-200 shadow-lg">
+                <h3 className="text-2xl font-light text-gray-800 mb-4 font-serif">Sign in to continue</h3>
+                <p className="text-gray-600 mb-6 font-light">
+                  Access the memory feed, share photos, and connect with others celebrating Brian's life.
+                </p>
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg hover:bg-gray-700 transition-colors font-light"
+                >
+                  Create Account / Sign In
+                </button>
+              </div>
             </div>
           </div>
-        ) : null}
+        ) : (
+          // Logged in - show full app
+          <div className="container mx-auto px-6 py-12">
+            {/* Welcome Header */}
+            <div className="text-center mb-12">
+              <div className="flex flex-col lg:flex-row items-center justify-center gap-12 mb-8">
+                <div className="flex-shrink-0">
+                  <Image
+                    src="/images/brian-portrait.png"
+                    alt="Brian Quain"
+                    width={200}
+                    height={200}
+                    className="rounded-full shadow-xl"
+                  />
+                </div>
+                <div className="text-center lg:text-left">
+                  <h1 className="text-4xl lg:text-5xl font-light text-gray-800 mb-4 font-serif">
+                    Remembering Brian Quain
+                  </h1>
+                  <p className="text-lg text-gray-600 font-light">
+                    Welcome back, {user.name}. Share your memories and explore the collection.
+                  </p>
+                </div>
+              </div>
+            </div>
 
-        {/* Upload Section */}
-        {theme !== "memorial" && user && (
-          <section className="max-w-2xl mx-auto">
-            <h2 className="text-2xl md:text-3xl font-light text-gray-700 mb-12 text-center">share a memory</h2>
-            <UploadSection user={user} onAuthChange={handleAuthChange} />
-          </section>
+            {/* View Toggle */}
+            <div className="mb-8">
+              <ViewToggle />
+            </div>
+
+            {/* Upload Section */}
+            <div className="mb-12">
+              <UploadSection user={user} />
+            </div>
+
+            {/* Main Feed */}
+            <InstagramFeed user={user} />
+
+            {/* Download Section */}
+            <div className="mt-16">
+              <DownloadSection />
+            </div>
+          </div>
         )}
-
-        {/* Memorial theme: Upload section with different styling */}
-        {theme === "memorial" && user && (
-          <section className="max-w-2xl mx-auto">
-            <UploadSection user={user} onAuthChange={handleAuthChange} />
-          </section>
-        )}
-
-        {/* View Toggle and Photos - Only show when authenticated */}
-        {authChecked && user && (
-          <section className="max-w-6xl mx-auto">
-            <ViewToggle user={user} onUserChange={handleUserChange} />
-          </section>
-        )}
-
-        {/* Download Section */}
-        <DownloadSection />
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 mt-24 pb-12">
-        <div className="container mx-auto px-6 text-center">
-          <div className="w-full h-px bg-gray-200 mb-8"></div>
-          <p className="text-gray-500 font-light">in memory of brian quain — forever in our hearts</p>
-        </div>
-      </footer>
+      {/* Auth Modal */}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} />
     </div>
   )
 }

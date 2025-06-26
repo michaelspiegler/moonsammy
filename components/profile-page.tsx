@@ -170,6 +170,8 @@ export function ProfilePage() {
         headers["x-session-token"] = sessionToken
       }
 
+      console.log("🔍 Profile save: Sending request with session token:", sessionToken ? "exists" : "missing")
+
       const response = await fetch("/api/profile", {
         method: "PUT",
         credentials: "include",
@@ -177,7 +179,9 @@ export function ProfilePage() {
         body: formData,
       })
 
+      console.log("🔍 Profile save: Response status:", response.status)
       const data = await response.json()
+      console.log("🔍 Profile save: Response data:", data)
 
       if (response.ok && data.success) {
         setUser(data.user)
@@ -190,10 +194,11 @@ export function ProfilePage() {
           alert("Profile updated successfully!")
         }
       } else {
+        console.error("🔍 Profile save: Error:", data.error)
         alert(data.error || "Failed to update profile")
       }
     } catch (error) {
-      console.error("Error updating profile:", error)
+      console.error("🔍 Profile save: Exception:", error)
       alert("Failed to update profile")
     } finally {
       setSaving(false)
@@ -271,6 +276,30 @@ export function ProfilePage() {
       hour: "2-digit",
       minute: "2-digit",
     })
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen theme-bg flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-600 mb-4"></div>
+          <p className="text-gray-600 font-light">Loading profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen theme-bg flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={handleBackToGallery} variant="outline">
+            Back to Gallery
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (

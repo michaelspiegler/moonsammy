@@ -54,21 +54,25 @@ export async function POST(request: Request) {
       VALUES (${sessionId}, ${userId}, ${expiryDate.toISOString()}, NOW())
     `
 
+    console.log("🔍 Register: Created user and session:", name, "Session ID:", sessionId.substring(0, 20) + "...")
+
     const response = NextResponse.json({
       success: true,
+      sessionToken: sessionId, // Include session token in response
       user: {
         id: userId,
         name: name.trim(),
         email: email.toLowerCase().trim(),
         role: "Member",
         profileImage: null,
+        sessionToken: sessionId, // Also include in user object
       },
     })
 
-    // Set session cookies
+    // Set multiple cookies for redundancy
     const cookieOptions = {
-      httpOnly: false,
-      secure: false,
+      httpOnly: false, // Allow JavaScript access
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax" as const,
       path: "/",
       maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -78,6 +82,7 @@ export async function POST(request: Request) {
     response.cookies.set("auth-session", sessionId, cookieOptions)
     response.cookies.set("user-session", sessionId, cookieOptions)
 
+    console.log("🔍 Register: Set cookies and returning success")
     return response
   } catch (error) {
     console.error("Registration error:", error)
