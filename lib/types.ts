@@ -16,3 +16,15 @@ export interface Photo {
   tags?: string[]
   year?: number
 }
+
+export interface Comment {
+  id: number
+  photoId: number
+  userId: number
+  content: string
+  createdAt: string
+  user: {
+    name: string
+    profileImageUrl?: string
+  }
+}

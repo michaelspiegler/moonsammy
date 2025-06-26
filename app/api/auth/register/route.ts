@@ -23,12 +23,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12)
+    const saltRounds = 12
+    const hashedPassword = await bcrypt.hash(password, saltRounds)
 
     // Create user
     const newUsers = await sql`
-      INSERT INTO users (name, email, password_hash, role)
-      VALUES (${name}, ${email}, ${hashedPassword}, 'user')
+      INSERT INTO users (name, email, password_hash, role, created_at)
+      VALUES (${name}, ${email}, ${hashedPassword}, 'user', NOW())
       RETURNING id, name, email, role, profile_image_url
     `
 
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Log activity
     await sql`
       INSERT INTO activity_logs (user_id, action, details)
-      VALUES (${newUser.id}, 'register', 'User registered')
+      VALUES (${newUser.id}, 'register', ${"User registered"})
     `
 
     const response = NextResponse.json({
@@ -57,13 +58,21 @@ export async function POST(request: NextRequest) {
         email: newUser.email,
         role: newUser.role,
         profileImageUrl: newUser.profile_image_url,
+        sessionToken: sessionId,
       },
       sessionToken: sessionId,
     })
 
-    // Set session cookie
+    // Set cookies
     response.cookies.set("session", sessionId, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60, // 24 hours
+    })
+
+    response.cookies.set("auth-session", sessionId, {
+      httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours

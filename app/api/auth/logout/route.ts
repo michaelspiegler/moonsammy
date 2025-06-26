@@ -1,22 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
+const sql = neon(process.env.DATABASE_URL!)
+
 export async function POST(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get("session")?.value
+    const sessionToken = request.cookies.get("session")?.value || request.cookies.get("auth-session")?.value
 
-    if (sessionId && process.env.DATABASE_URL) {
-      const sql = neon(process.env.DATABASE_URL)
-      await sql`DELETE FROM user_sessions WHERE id = ${sessionId}`
+    if (sessionToken) {
+      // Delete session from database
+      await sql`
+        DELETE FROM user_sessions WHERE id = ${sessionToken}
+      `
     }
 
     const response = NextResponse.json({ success: true })
-    response.cookies.delete("session")
+
+    // Clear cookies
+    response.cookies.set("session", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+    })
+
+    response.cookies.set("auth-session", "", {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+    })
+
     return response
   } catch (error) {
     console.error("Logout error:", error)
-    const response = NextResponse.json({ success: true })
-    response.cookies.delete("session")
-    return response
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     // Log activity
     await sql`
       INSERT INTO activity_logs (user_id, action, details)
-      VALUES (${user.id}, 'login', 'User logged in')
+      VALUES (${user.id}, 'login', ${"User logged in"})
     `
 
     const response = NextResponse.json({
@@ -55,13 +55,21 @@ export async function POST(request: NextRequest) {
         email: user.email,
         role: user.role,
         profileImageUrl: user.profile_image_url,
+        sessionToken: sessionId,
       },
       sessionToken: sessionId,
     })
 
-    // Set session cookie
+    // Set cookies
     response.cookies.set("session", sessionId, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60, // 24 hours
+    })
+
+    response.cookies.set("auth-session", sessionId, {
+      httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 24 * 60 * 60, // 24 hours
