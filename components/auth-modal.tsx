@@ -1,203 +1,147 @@
 "use client"
-import { useState } from "react"
+
 import type React from "react"
 
-import type { User } from "@/lib/types"
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { useRouter } from "next/navigation"
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: (user: User) => void
+  onSuccess: () => void
 }
 
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
-  const [mode, setMode] = useState<"login" | "register">("login")
-  const [name, setName] = useState("")
+  const [isLoginView, setIsLoginView] = useState(true)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [name, setName] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
+  const router = useRouter()
 
-  const handleLogin = async () => {
-    setLoading(true)
-    setError("")
-
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        console.log("🔍 Auth Modal: Login successful, data:", data)
-        if (data.sessionToken) {
-          localStorage.setItem("sessionToken", data.sessionToken)
-        }
-        onSuccess(data.user)
-        setError("")
-      } else {
-        setError(data.error || "Login failed")
-      }
-    } catch (err: any) {
-      setError(err.message || "Login failed")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleRegister = async () => {
-    if (password !== confirmPassword) {
-      setError("Passwords don't match")
-      return
-    }
-
-    setLoading(true)
-    setError("")
-
-    try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, email, password }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        console.log("🔍 Auth Modal: Registration successful, data:", data)
-        if (data.sessionToken) {
-          localStorage.setItem("sessionToken", data.sessionToken)
-        }
-        onSuccess(data.user)
-        setError("")
-      } else {
-        setError(data.error || "Registration failed")
-      }
-    } catch (err: any) {
-      setError(err.message || "Registration failed")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (mode === "login") {
-      handleLogin()
-    } else {
-      handleRegister()
-    }
-  }
+    setIsLoading(true)
 
-  if (!isOpen) {
-    return null
+    const url = isLoginView ? "/api/auth/login" : "/api/auth/register"
+    const body = isLoginView ? { email, password } : { email, password, name }
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Something went wrong")
+      }
+
+      toast({
+        title: "Success",
+        description: isLoginView ? "Logged in successfully." : "Account created successfully.",
+      })
+      onSuccess()
+      onClose()
+      // Refresh the page to update session state
+      router.refresh()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <div className="auth-modal-overlay">
-      <div className="auth-modal-container">
-        <div className="text-center">
-          {/* Tab Headers */}
-          <div className="flex mb-6 bg-[#333333] rounded-lg p-1">
-            <button
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                mode === "login" ? "bg-[#D4AF37] text-[#222222]" : "text-[#D4AF37] hover:bg-[#444444]"
-              }`}
-              onClick={() => setMode("login")}
-            >
-              Sign In
-            </button>
-            <button
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                mode === "register" ? "bg-[#D4AF37] text-[#222222]" : "text-[#D4AF37] hover:bg-[#444444]"
-              }`}
-              onClick={() => setMode("register")}
-            >
-              Create Account
-            </button>
-          </div>
-
-          <h3 className="text-xl font-light text-[#D4AF37] mb-6 font-serif">
-            {mode === "login" ? "Welcome Back" : "Join the Memorial"}
-          </h3>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === "register" && (
-              <input
-                type="text"
-                placeholder="Full Name"
-                className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px] bg-background text-foreground memorial:bg-black memorial:text-gold-50 memorial:border-gold-700">
+        <DialogHeader>
+          <DialogTitle>{isLoginView ? "Sign In" : "Create Account"}</DialogTitle>
+          <DialogDescription>
+            {isLoginView ? "Sign in to continue." : "Create an account to share your memories."}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAuth}>
+          <div className="grid gap-4 py-4">
+            {!isLoginView && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="email" className="text-right">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="col-span-3"
                 required
               />
-            )}
-
-            <input
-              type="email"
-              placeholder="Email Address"
-              className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-
-            {mode === "register" && (
-              <input
-                type="password"
-                placeholder="Confirm Password"
-                className="w-full py-3 px-4 bg-[#333333] border border-[#444444] rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37]"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            )}
-
-            {error && <p className="text-red-400 text-sm font-light">{error}</p>}
-
-            <div className="mt-6 space-y-3">
-              <button
-                type="submit"
-                className="w-full py-3 px-4 bg-[#D4AF37] text-[#222222] font-medium rounded-md hover:bg-[#B8941F] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#222222] transition-colors disabled:opacity-50"
-                disabled={loading}
-              >
-                {loading
-                  ? mode === "login"
-                    ? "Signing In..."
-                    : "Creating Account..."
-                  : mode === "login"
-                    ? "Sign In"
-                    : "Create Account"}
-              </button>
-
-              <button
-                type="button"
-                className="w-full py-3 px-4 bg-transparent border border-[#444444] text-[#D4AF37] font-medium rounded-md hover:bg-[#333333] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#222222] transition-colors"
-                onClick={onClose}
-              >
-                Cancel
-              </button>
             </div>
-          </form>
-        </div>
-      </div>
-    </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="password" className="text-right">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="col-span-3"
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center">
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => setIsLoginView(!isLoginView)}
+              className="text-sm memorial:text-gold-200 hover:memorial:text-gold-50"
+            >
+              {isLoginView ? "Need an account?" : "Already have an account?"}
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="memorial:bg-transparent memorial:border memorial:border-gold-500 memorial:text-gold-500 hover:memorial:bg-gold-500 hover:memorial:text-black"
+            >
+              {isLoading ? "Processing..." : isLoginView ? "Sign In" : "Create Account"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

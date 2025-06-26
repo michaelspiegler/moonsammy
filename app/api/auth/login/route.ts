@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const users = await sql`
       SELECT id, name, email, password_hash, role, profile_image_url 
       FROM users 
-      WHERE email = ${email}
+      WHERE email = ${email.toLowerCase()}
     `
 
     if (users.length === 0) {
@@ -36,18 +36,17 @@ export async function POST(request: NextRequest) {
     const sessionToken = uuidv4()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-    // Store session in database
+    // Store session in database, using the correct schema.
+    // The session token is stored in the 'id' column.
     await sql`
-      INSERT INTO user_sessions (user_id, session_token, expires_at)
-      VALUES (${user.id}, ${sessionToken}, ${expiresAt})
-      ON CONFLICT (user_id) 
-      DO UPDATE SET session_token = ${sessionToken}, expires_at = ${expiresAt}
+      INSERT INTO user_sessions (id, user_id, expires_at)
+      VALUES (${sessionToken}, ${user.id}, ${expiresAt})
     `
 
     // Log activity
     await sql`
       INSERT INTO admin_logs (action, details, user_id, created_at)
-      VALUES ('user_login', ${JSON.stringify({ email, ip: request.ip })}, ${user.id}, NOW())
+      VALUES ('user_login', ${JSON.stringify({ email: user.email, ip: request.ip })}, ${user.id}, NOW())
     `
 
     const userData = {
@@ -56,7 +55,6 @@ export async function POST(request: NextRequest) {
       email: user.email,
       role: user.role,
       profileImageUrl: user.profile_image_url,
-      sessionToken,
     }
 
     // Create response with user data
