@@ -69,19 +69,22 @@ export function InstagramFeed({ user, filters = {} }: InstagramFeedProps) {
         params.append("tags", filters.tags.join(","))
       }
 
+      console.log("📸 Instagram Feed: Fetching photos with params:", params.toString())
+
       const response = await fetch(`/api/photos?${params.toString()}`, {
         credentials: "include",
       })
 
       if (response.ok) {
         const data = await response.json()
+        console.log("📸 Instagram Feed: Received photos:", data.photos?.length || 0)
         setPhotos(data.photos || [])
       } else {
-        console.error("Failed to fetch photos")
+        console.error("📸 Instagram Feed: Failed to fetch photos, status:", response.status)
         setPhotos([])
       }
     } catch (error) {
-      console.error("Error fetching photos:", error)
+      console.error("📸 Instagram Feed: Error fetching photos:", error)
       setPhotos([])
     } finally {
       setLoading(false)

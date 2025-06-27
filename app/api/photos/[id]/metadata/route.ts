@@ -7,16 +7,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     console.log(`📊 Fetching metadata for photo: ${photoId}`)
 
     if (!process.env.DATABASE_URL) {
-      console.log("📊 No database configured")
+      console.log("📸 Photo metadata: No database URL")
       return NextResponse.json(
         {
-          title: "",
-          year: null,
-          tags: [],
-          comments: [],
           likes: 0,
+          comments: [],
           hasLiked: false,
-          error: "Database not configured",
         },
         { status: 200 },
       )
@@ -24,113 +20,61 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Create tables if they don't exist
-    try {
-      await sql`
-        CREATE TABLE IF NOT EXISTS photo_metadata (
-          id TEXT PRIMARY KEY,
-          title TEXT DEFAULT '',
-          year INTEGER,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `
+    // Get session for like status
+    const sessionId = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1]
+    let currentUserId = null
 
-      await sql`
-        CREATE TABLE IF NOT EXISTS comments (
-          id TEXT PRIMARY KEY,
-          photo_id TEXT NOT NULL,
-          author TEXT NOT NULL,
-          content TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS likes (
-          id TEXT PRIMARY KEY,
-          photo_id TEXT NOT NULL,
-          author TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(photo_id, author)
-        )
-      `
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS tags (
-          id TEXT PRIMARY KEY,
-          name TEXT UNIQUE NOT NULL,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS photo_tags (
-          id TEXT PRIMARY KEY,
-          photo_id TEXT NOT NULL,
-          tag_id TEXT NOT NULL,
-          created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(photo_id, tag_id)
-        )
-      `
-    } catch (tableError) {
-      console.log("📊 Tables may already exist:", tableError.message)
+    if (sessionId) {
+      try {
+        const sessions = await sql`
+          SELECT user_id FROM user_sessions 
+          WHERE id = ${sessionId} AND expires_at > NOW()
+        `
+        if (sessions.length > 0) {
+          currentUserId = sessions[0].user_id
+        }
+      } catch (error) {
+        console.log("📸 Photo metadata: Session check failed:", error)
+      }
     }
 
-    // Fetch all metadata in parallel with error handling
-    const [metadata, comments, likes, photoTags] = await Promise.allSettled([
-      sql`SELECT * FROM photo_metadata WHERE id = ${photoId}`,
-      sql`SELECT * FROM comments WHERE photo_id = ${photoId} ORDER BY created_at ASC`,
-      sql`SELECT * FROM likes WHERE photo_id = ${photoId} ORDER BY created_at ASC`,
-      sql`
-        SELECT t.id, t.name 
-        FROM photo_tags pt 
-        JOIN tags t ON pt.tag_id = t.id 
-        WHERE pt.photo_id = ${photoId}
-        ORDER BY t.name ASC
-      `,
+    // Fetch metadata with error handling
+    const [likesResult, commentsResult, hasLikedResult] = await Promise.allSettled([
+      sql`SELECT COUNT(*) as count FROM likes WHERE photo_id = ${photoId}`.catch(() => [{ count: 0 }]),
+      sql`SELECT * FROM comments WHERE photo_id = ${photoId} ORDER BY created_at ASC`.catch(() => []),
+      currentUserId
+        ? sql`SELECT COUNT(*) as count FROM likes WHERE photo_id = ${photoId} AND author = ${currentUserId}`.catch(
+            () => [{ count: 0 }],
+          )
+        : Promise.resolve([{ count: 0 }]),
     ])
 
-    // Process results safely
-    const metadataResult = metadata.status === "fulfilled" ? metadata.value : []
-    const commentsResult = comments.status === "fulfilled" ? comments.value : []
-    const likesResult = likes.status === "fulfilled" ? likes.value : []
-    const tagsResult = photoTags.status === "fulfilled" ? photoTags.value : []
+    const likes = likesResult.status === "fulfilled" ? likesResult.value[0]?.count || 0 : 0
+    const comments = commentsResult.status === "fulfilled" ? commentsResult.value : []
+    const hasLiked = hasLikedResult.status === "fulfilled" ? hasLikedResult.value[0]?.count > 0 : false
 
-    console.log(
-      `📊 Photo ${photoId} - Comments: ${commentsResult.length}, Likes: ${likesResult.length}, Tags: ${tagsResult.length}`,
-    )
+    console.log("📸 Photo metadata: Success - likes:", likes, "comments:", comments.length)
 
     return NextResponse.json(
       {
-        title: metadataResult[0]?.title || "",
-        year: metadataResult[0]?.year || null,
-        tags: tagsResult.map((tag) => ({
-          id: tag.id,
-          name: tag.name,
-        })),
-        comments: commentsResult.map((c) => ({
+        likes: Number(likes),
+        comments: comments.map((c) => ({
           id: c.id,
           author: c.author,
           content: c.content,
-          timestamp: c.created_at,
+          created_at: c.created_at,
         })),
-        likes: likesResult.length,
-        hasLiked: false, // TODO: Check if current user has liked
+        hasLiked,
       },
       { status: 200 },
     )
   } catch (error) {
-    console.error("📊 Error fetching metadata:", error)
-    // Always return 200 with safe defaults to avoid JSON parsing issues
+    console.error("📸 Photo metadata: Error:", error)
     return NextResponse.json(
       {
-        title: "",
-        year: null,
-        tags: [],
-        comments: [],
         likes: 0,
+        comments: [],
         hasLiked: false,
-        error: "Failed to load metadata",
       },
       { status: 200 },
     )
