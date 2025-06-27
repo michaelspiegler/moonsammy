@@ -234,7 +234,7 @@ export function PhotoGallery() {
           <p className="text-gray-500 text-sm mb-6 font-light">Please wait {retryAfter} seconds before trying again</p>
         )}
 
-        <Button onClick={handleRetry} variant="outline" className="font-light">
+        <Button onClick={handleRetry} variant="outline" className="font-light bg-transparent">
           <RefreshCw className="h-4 w-4 mr-2" />
           Try Again
         </Button>

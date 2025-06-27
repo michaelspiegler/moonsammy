@@ -207,10 +207,10 @@ export function InstagramFeed({ photos, user, onAddComment, onLikePhoto }: Insta
               {/* Tags */}
               {photo.tags && photo.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-3">
-                  {photo.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
+                  {photo.tags.map((tag, index) => (
+                    <Badge key={index} variant="secondary" className="text-xs">
                       <Tag className="h-2 w-2 mr-1" />
-                      {tag}
+                      {typeof tag === "string" ? tag : tag.name}
                     </Badge>
                   ))}
                 </div>
