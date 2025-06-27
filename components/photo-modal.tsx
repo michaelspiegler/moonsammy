@@ -5,13 +5,20 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { X, Edit2, MessageCircle, Send, AlertCircle, Database, Download, Calendar, Tag, Plus, User } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { X, Heart, MessageCircle, User, Tag, Calendar, Edit2, Save } from "lucide-react"
 import { TagInput } from "./tag-input"
 
 interface Comment {
   id: string
   author: string
   content: string
+  timestamp: string
+}
+
+interface Like {
+  id: string
+  author: string
   timestamp: string
 }
 
@@ -25,208 +32,40 @@ interface Photo {
   url: string
   filename: string
   uploadedAt: string
+  uploaderName?: string
+  uploaderProfileImage?: string | null
   title?: string
-  year?: number | null
+  year?: number
   tags?: PhotoTag[]
   comments?: Comment[]
+  likes?: Like[]
 }
 
 interface PhotoModalProps {
   photo: Photo
   onUpdate: (photo: Photo) => void
   onClose: () => void
-  user: {
-    name: string
-    profileImage: string
-  } | null
+  user?: any
 }
 
 export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) {
-  const [isEditingTitle, setIsEditingTitle] = useState(false)
-  const [isEditingYear, setIsEditingYear] = useState(false)
-  const [title, setTitle] = useState(photo.title || "")
-  const [year, setYear] = useState(photo.year?.toString() || "")
-  const [tags, setTags] = useState<PhotoTag[]>(photo.tags || [])
-  const [isAddingTag, setIsAddingTag] = useState(false)
   const [newComment, setNewComment] = useState("")
-  const [isAddingComment, setIsAddingComment] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [comments, setComments] = useState<Comment[]>(photo.comments || [])
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [editingYear, setEditingYear] = useState(false)
+  const [tempTitle, setTempTitle] = useState(photo.title || "")
+  const [tempYear, setTempYear] = useState(photo.year?.toString() || "")
+  const [showTagInput, setShowTagInput] = useState(false)
 
-  // Load author name from localStorage and fetch latest metadata
   useEffect(() => {
-    // Fetch latest metadata when modal opens
-    fetchLatestMetadata()
-  }, [photo.id])
-
-  const fetchLatestMetadata = async () => {
-    try {
-      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`)
-      const data = await response.json()
-
-      if (data.error) {
-        setError(data.error)
-      } else {
-        setComments(data.comments || [])
-        setTitle(data.title || "")
-        setYear(data.year?.toString() || "")
-        setTags(data.tags || [])
-      }
-    } catch (error) {
-      console.error("Error fetching metadata:", error)
-      setError("Failed to load latest metadata")
-    }
-  }
-
-  const handleSaveTitle = async () => {
-    if (title.trim() === photo.title) {
-      setIsEditingTitle(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "setTitle", title: title.trim() }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        const updatedPhoto = { ...photo, title: title.trim() }
-        onUpdate(updatedPhoto)
-        setIsEditingTitle(false)
-      } else {
-        setError(data.error || "Failed to save title")
-      }
-    } catch (error) {
-      console.error("Error saving title:", error)
-      setError("Failed to save title. Please check your connection.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSaveYear = async () => {
-    const yearNum = year.trim() ? Number.parseInt(year.trim()) : null
-    if (yearNum === photo.year) {
-      setIsEditingYear(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "setYear", year: yearNum }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        const updatedPhoto = { ...photo, year: yearNum }
-        onUpdate(updatedPhoto)
-        setIsEditingYear(false)
-      } else {
-        setError(data.error || "Failed to save year")
-      }
-    } catch (error) {
-      console.error("Error saving year:", error)
-      setError("Failed to save year. Please check your connection.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleAddTag = async (tagName: string) => {
-    if (!tagName.trim()) return
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "addTag", tagName: tagName.trim() }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        const newTagObj = data.tag
-        const updatedTags = [...tags, newTagObj]
-        setTags(updatedTags)
-
-        const updatedPhoto = {
-          ...photo,
-          tags: updatedTags,
-        }
-        onUpdate(updatedPhoto)
-        setIsAddingTag(false)
-      } else {
-        setError(data.error || "Failed to add tag")
-      }
-    } catch (error) {
-      console.error("Error adding tag:", error)
-      setError("Failed to add tag. Please check your connection.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleRemoveTag = async (tagId: string) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "removeTag", tagId }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        const updatedTags = tags.filter((tag) => tag.id !== tagId)
-        setTags(updatedTags)
-
-        const updatedPhoto = {
-          ...photo,
-          tags: updatedTags,
-        }
-        onUpdate(updatedPhoto)
-      } else {
-        setError(data.error || "Failed to remove tag")
-      }
-    } catch (error) {
-      console.error("Error removing tag:", error)
-      setError("Failed to remove tag. Please check your connection.")
-    } finally {
-      setLoading(false)
-    }
-  }
+    setTempTitle(photo.title || "")
+    setTempYear(photo.year?.toString() || "")
+  }, [photo])
 
   const handleAddComment = async () => {
-    if (!newComment.trim() || !user) {
-      if (!user) {
-        setError("Please sign in to add comments")
-      }
-      return
-    }
+    if (!newComment.trim() || !user) return
 
     setLoading(true)
-    setError(null)
-
     try {
       const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
         method: "POST",
@@ -239,25 +78,166 @@ export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) 
       })
 
       const data = await response.json()
-
       if (response.ok && data.success) {
-        const newCommentObj = data.comment
-        const updatedComments = [...comments, newCommentObj]
-        setComments(updatedComments)
-
         const updatedPhoto = {
           ...photo,
-          comments: updatedComments,
+          comments: [...(photo.comments || []), data.comment],
         }
         onUpdate(updatedPhoto)
         setNewComment("")
-        setIsAddingComment(false)
-      } else {
-        setError(data.error || "Failed to add comment")
       }
     } catch (error) {
       console.error("Error adding comment:", error)
-      setError("Failed to add comment. Please check your connection.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLike = async () => {
+    if (!user) return
+
+    const userLike = photo.likes?.find((like) => like.author === user.name)
+
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: userLike ? "removeLike" : "addLike",
+          author: user.name,
+          likeId: userLike?.id,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        let updatedLikes = photo.likes || []
+        if (userLike) {
+          updatedLikes = updatedLikes.filter((like) => like.id !== userLike.id)
+        } else {
+          updatedLikes = [...updatedLikes, data.like]
+        }
+
+        const updatedPhoto = {
+          ...photo,
+          likes: updatedLikes,
+        }
+        onUpdate(updatedPhoto)
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveTitle = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "updateTitle",
+          title: tempTitle.trim(),
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        const updatedPhoto = {
+          ...photo,
+          title: tempTitle.trim(),
+        }
+        onUpdate(updatedPhoto)
+        setEditingTitle(false)
+      }
+    } catch (error) {
+      console.error("Error updating title:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveYear = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "updateYear",
+          year: tempYear ? Number.parseInt(tempYear) : null,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        const updatedPhoto = {
+          ...photo,
+          year: tempYear ? Number.parseInt(tempYear) : undefined,
+        }
+        onUpdate(updatedPhoto)
+        setEditingYear(false)
+      }
+    } catch (error) {
+      console.error("Error updating year:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddTag = async (tagName: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "addTag",
+          tagName: tagName.trim(),
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        const updatedPhoto = {
+          ...photo,
+          tags: [...(photo.tags || []), data.tag],
+        }
+        onUpdate(updatedPhoto)
+        setShowTagInput(false)
+      }
+    } catch (error) {
+      console.error("Error adding tag:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRemoveTag = async (tagId: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/photos/${encodeURIComponent(photo.id)}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "removeTag",
+          tagId: tagId,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        const updatedPhoto = {
+          ...photo,
+          tags: photo.tags?.filter((tag) => tag.id !== tagId) || [],
+        }
+        onUpdate(updatedPhoto)
+      }
+    } catch (error) {
+      console.error("Error removing tag:", error)
     } finally {
       setLoading(false)
     }
@@ -265,330 +245,270 @@ export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) 
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
       year: "numeric",
-      hour: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
       minute: "2-digit",
     })
   }
 
-  const handleDownload = async () => {
-    try {
-      const response = await fetch(photo.url)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = photo.filename || "memory.jpg"
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (error) {
-      console.error("Download failed:", error)
-      alert("Download failed. Please try again.")
-    }
-  }
+  const isLikedByUser = photo.likes?.some((like) => like.author === user?.name) || false
 
   return (
-    <div className="flex flex-col md:flex-row max-h-[90vh]">
+    <div className="flex flex-col md:flex-row h-full max-h-[95vh]">
+      {/* Close Button */}
+      <Button
+        onClick={onClose}
+        variant="ghost"
+        size="sm"
+        className="absolute top-4 right-4 z-10 bg-black/50 text-white hover:bg-black/70 rounded-full p-2"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+
       {/* Image Section */}
-      <div className="flex-1 relative bg-gray-100 flex items-center justify-center min-h-0">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 bg-white/80 hover:bg-white p-2 rounded-full transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleDownload}
-          className="absolute top-4 left-4 z-10 bg-white/80 hover:bg-white p-2 rounded-full transition-colors"
-          title="Download photo"
-        >
-          <Download className="h-4 w-4" />
-        </button>
-        <div className="relative w-full h-full flex items-center justify-center p-4">
-          <Image
-            src={photo.url || "/placeholder.svg"}
-            alt={photo.title || "Memory"}
-            width={1200}
-            height={800}
-            className="max-w-full max-h-full object-contain"
-            style={{ width: "auto", height: "auto" }}
-          />
-        </div>
+      <div className="flex-1 relative bg-black flex items-center justify-center">
+        <Image
+          src={photo.url || "/placeholder.svg"}
+          alt={photo.title || photo.filename}
+          fill
+          className="object-contain"
+          sizes="(max-width: 768px) 100vw, 70vw"
+        />
       </div>
 
       {/* Details Section */}
-      <div className="w-full md:w-96 flex flex-col bg-white">
-        {/* Title Section */}
-        <div className="p-6 border-b border-gray-200">
-          {isEditingTitle ? (
-            <div className="space-y-3">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Add a title for this memory..."
-                className="font-light"
-                onKeyDown={(e) => e.key === "Enter" && handleSaveTitle()}
-              />
-              <div className="flex space-x-2">
-                <Button
-                  onClick={handleSaveTitle}
-                  disabled={loading}
-                  className="bg-gray-800 hover:bg-gray-700 text-white font-light px-4 py-2"
-                >
-                  {loading ? "Saving..." : "Save"}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setTitle(photo.title || "")
-                    setIsEditingTitle(false)
-                    setError(null)
-                  }}
-                  variant="outline"
-                  className="font-light px-4 py-2"
-                >
-                  Cancel
-                </Button>
-              </div>
+      <div className="w-full md:w-96 bg-white flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center space-x-3 mb-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
+              {photo.uploaderProfileImage ? (
+                <Image
+                  src={photo.uploaderProfileImage || "/placeholder.svg"}
+                  alt={photo.uploaderName || "User"}
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="h-5 w-5 text-gray-400" />
+              )}
             </div>
-          ) : (
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="text-xl font-light text-gray-800 mb-2">{title || "Untitled Memory"}</h3>
-                <p className="text-sm text-gray-500 font-light">{formatDate(photo.uploadedAt)}</p>
-              </div>
-              <Button
-                onClick={() => setIsEditingTitle(true)}
-                variant="ghost"
-                size="sm"
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <Edit2 className="h-4 w-4" />
-              </Button>
+            <div className="flex-1">
+              <p className="font-medium text-gray-800">{photo.uploaderName || "Anonymous"}</p>
+              <p className="text-sm text-gray-500">{formatDate(photo.uploadedAt)}</p>
             </div>
-          )}
-        </div>
-
-        {/* Year Section */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              <span className="font-light text-gray-700">Year Taken</span>
-            </div>
-            <Button
-              onClick={() => setIsEditingYear(true)}
-              variant="ghost"
-              size="sm"
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
           </div>
 
-          {isEditingYear ? (
-            <div className="space-y-3">
-              <Input
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                placeholder="e.g. 2020"
-                type="number"
-                min="1900"
-                max={new Date().getFullYear()}
-                className="font-light"
-                onKeyDown={(e) => e.key === "Enter" && handleSaveYear()}
-              />
-              <div className="flex space-x-2">
-                <Button
-                  onClick={handleSaveYear}
-                  disabled={loading}
-                  className="bg-gray-800 hover:bg-gray-700 text-white font-light px-4 py-2"
-                >
-                  {loading ? "Saving..." : "Save"}
+          {/* Title */}
+          <div className="mb-3">
+            {editingTitle ? (
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={tempTitle}
+                  onChange={(e) => setTempTitle(e.target.value)}
+                  placeholder="Add a title..."
+                  className="flex-1"
+                />
+                <Button onClick={handleSaveTitle} size="sm" disabled={loading}>
+                  <Save className="h-4 w-4" />
                 </Button>
-                <Button
-                  onClick={() => {
-                    setYear(photo.year?.toString() || "")
-                    setIsEditingYear(false)
-                    setError(null)
-                  }}
-                  variant="outline"
-                  className="font-light px-4 py-2"
-                >
-                  Cancel
+                <Button onClick={() => setEditingTitle(false)} variant="ghost" size="sm">
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
-          ) : (
-            <p className="text-gray-600 font-light">{year ? year : "Year not specified"}</p>
-          )}
-        </div>
-
-        {/* Tags Section */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <Tag className="h-4 w-4 text-gray-500" />
-              <span className="font-light text-gray-700">Tags ({tags.length})</span>
-            </div>
-            <Button
-              onClick={() => setIsAddingTag(!isAddingTag)}
-              variant="ghost"
-              size="sm"
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Add Tag Form */}
-          {isAddingTag && (
-            <div className="space-y-3 mb-4 p-3 bg-gray-50 rounded">
-              <TagInput
-                onAddTag={handleAddTag}
-                onCancel={() => {
-                  setIsAddingTag(false)
-                  setError(null)
-                }}
-                loading={loading}
-                placeholder="Search or create a tag..."
-              />
-            </div>
-          )}
-
-          {/* Tags Display - FIXED: Properly render tag objects */}
-          <div className="flex flex-wrap gap-2">
-            {tags.length > 0 ? (
-              tags.map((tag) => (
-                <div
-                  key={tag.id}
-                  className="flex items-center space-x-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs"
-                >
-                  <span>{tag.name}</span>
-                  <button onClick={() => handleRemoveTag(tag.id)} className="text-blue-600 hover:text-blue-800 ml-1">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))
             ) : (
-              <p className="text-gray-500 font-light text-sm">No tags added yet</p>
-            )}
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="p-4 bg-red-50 border-b border-red-200">
-            <div className="flex items-start space-x-2">
-              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-red-600 text-sm font-light">{error}</p>
-                {error.includes("Database") && (
-                  <p className="text-red-500 text-xs mt-1 font-light">
-                    <Database className="h-3 w-3 inline mr-1" />
-                    Neon database integration required
-                  </p>
+              <div className="flex items-center justify-between">
+                <p className="text-gray-800 font-medium">
+                  {photo.title || <span className="text-gray-400 italic">No title</span>}
+                </p>
+                {user && (
+                  <Button onClick={() => setEditingTitle(true)} variant="ghost" size="sm">
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
-            </div>
+            )}
           </div>
-        )}
 
-        {/* Comments Section */}
-        <div className="flex-1 flex flex-col">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-light text-gray-700">Memories & Stories ({comments.length})</h4>
+          {/* Year */}
+          <div className="mb-3">
+            {editingYear ? (
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={tempYear}
+                  onChange={(e) => setTempYear(e.target.value)}
+                  placeholder="Year (e.g., 2023)"
+                  type="number"
+                  className="flex-1"
+                />
+                <Button onClick={handleSaveYear} size="sm" disabled={loading}>
+                  <Save className="h-4 w-4" />
+                </Button>
+                <Button onClick={() => setEditingYear(false)} variant="ghost" size="sm">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span className="text-gray-600">
+                    {photo.year || <span className="text-gray-400 italic">No year set</span>}
+                  </span>
+                </div>
+                {user && (
+                  <Button onClick={() => setEditingYear(true)} variant="ghost" size="sm">
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Tags Display */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Tag className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Tags</span>
+              </div>
+              {user && (
+                <Button onClick={() => setShowTagInput(true)} variant="ghost" size="sm">
+                  <Tag className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {photo.tags && photo.tags.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {photo.tags.map((tag) => (
+                  <Badge key={tag.id} variant="secondary" className="text-xs">
+                    <span>{tag.name}</span>
+                    {user && (
+                      <button onClick={() => handleRemoveTag(tag.id)} className="ml-1 hover:text-red-500">
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 italic text-sm">No tags</p>
+            )}
+
+            {/* Tag Input */}
+            {showTagInput && user && (
+              <div className="mt-2">
+                <TagInput
+                  onAddTag={handleAddTag}
+                  onCancel={() => setShowTagInput(false)}
+                  loading={loading}
+                  placeholder="Add a tag..."
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          {user && (
+            <div className="flex items-center space-x-4">
               <Button
-                onClick={() => setIsAddingComment(!isAddingComment)}
+                onClick={handleLike}
                 variant="ghost"
                 size="sm"
-                className="text-gray-500 hover:text-gray-700"
+                className="p-0 h-auto hover:bg-transparent"
+                disabled={loading}
               >
-                <MessageCircle className="h-4 w-4 mr-1" />
-                Add
+                <Heart
+                  className={`h-6 w-6 ${
+                    isLikedByUser ? "fill-red-500 text-red-500" : "text-gray-700 hover:text-red-500"
+                  }`}
+                />
+              </Button>
+              <Button variant="ghost" size="sm" className="p-0 h-auto hover:bg-transparent">
+                <MessageCircle className="h-6 w-6 text-gray-700" />
               </Button>
             </div>
+          )}
 
-            {/* Add Comment Form */}
-            {isAddingComment && user && (
-              <div className="space-y-3 mb-6 p-4 bg-gray-50 rounded">
-                <div className="flex items-center space-x-2">
-                  {user.profileImage ? (
-                    <div className="w-6 h-6 rounded-full overflow-hidden">
-                      <img
-                        src={user.profileImage || "/placeholder.svg"}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <User className="h-4 w-4 text-gray-600" />
-                  )}
-                  <span className="font-medium text-gray-700">{user.name}</span>
-                </div>
-                <Textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Share a memory about this photo..."
-                  className="font-light resize-none"
-                  rows={3}
-                />
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={handleAddComment}
-                    disabled={loading || !newComment.trim()}
-                    className="bg-gray-800 hover:bg-gray-700 text-white font-light px-4 py-2"
-                  >
-                    <Send className="h-4 w-4 mr-1" />
-                    {loading ? "Sharing..." : "Share"}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setIsAddingComment(false)
-                      setError(null)
-                    }}
-                    variant="outline"
-                    className="font-light px-4 py-2"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
+          {/* Likes */}
+          {photo.likes && photo.likes.length > 0 && (
+            <div className="mt-3">
+              <p className="text-sm font-medium text-gray-800">
+                {photo.likes.length} {photo.likes.length === 1 ? "person loves" : "people love"} this
+              </p>
+              <p className="text-xs text-gray-600">
+                {photo.likes
+                  .slice(0, 3)
+                  .map((like) => like.author)
+                  .join(", ")}
+                {photo.likes.length > 3 && ` and ${photo.likes.length - 3} others`}
+              </p>
+            </div>
+          )}
+        </div>
 
-            {!isAddingComment && !user && (
-              <div className="text-center py-8 bg-blue-50 border border-blue-200 rounded">
-                <MessageCircle className="mx-auto h-8 w-8 text-blue-400 mb-3" />
-                <p className="text-blue-700 font-medium mb-2">Sign in to share memories</p>
-                <p className="text-blue-600 text-sm">Create an account to comment and interact with photos</p>
-              </div>
-            )}
-          </div>
+        {/* Comments Section */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <h3 className="font-medium text-gray-800 mb-3">Comments ({photo.comments?.length || 0})</h3>
 
-          {/* Comments List */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {comments.length > 0 ? (
-              comments.map((comment) => (
-                <div key={comment.id} className="border-l-2 border-gray-200 pl-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-gray-700">{comment.author}</span>
-                    <span className="text-xs text-gray-500">{formatDate(comment.timestamp)}</span>
+          <div className="space-y-3 mb-4">
+            {photo.comments && photo.comments.length > 0 ? (
+              photo.comments.map((comment) => (
+                <div key={comment.id} className="flex space-x-3">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-gray-400" />
                   </div>
-                  <p className="text-gray-600 font-light leading-relaxed">{comment.content}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="font-medium text-sm text-gray-800">{comment.author}</span>
+                      <span className="text-xs text-gray-500">{formatDate(comment.timestamp)}</span>
+                    </div>
+                    <p className="text-sm text-gray-700">{comment.content}</p>
+                  </div>
                 </div>
               ))
             ) : (
-              <div className="text-center py-8">
-                <MessageCircle className="mx-auto h-8 w-8 text-gray-300 mb-3" />
-                <p className="text-gray-500 font-light">No memories shared yet.</p>
-                <p className="text-gray-400 font-light text-sm">Be the first to add one!</p>
-              </div>
+              <p className="text-gray-500 text-sm italic">No comments yet</p>
             )}
           </div>
+
+          {/* Add Comment */}
+          {user && (
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex space-x-3">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
+                  {user.profileImage ? (
+                    <Image
+                      src={user.profileImage || "/placeholder.svg"}
+                      alt={user.name}
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-4 w-4 text-gray-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <Textarea
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="min-h-[80px] resize-none"
+                  />
+                  <div className="flex justify-end mt-2">
+                    <Button onClick={handleAddComment} disabled={!newComment.trim() || loading} size="sm">
+                      {loading ? "Posting..." : "Post Comment"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
