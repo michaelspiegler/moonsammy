@@ -1,6 +1,5 @@
 "use client"
 
-import type React from "react"
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -8,7 +7,29 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { X, Edit2, MessageCircle, Send, AlertCircle, Database, Download, Calendar, Tag, Plus, User } from "lucide-react"
 import { TagInput } from "./tag-input"
-import type { Photo, PhotoTag, Comment } from "@/types"
+
+interface Comment {
+  id: string
+  author: string
+  content: string
+  timestamp: string
+}
+
+interface PhotoTag {
+  id: string
+  name: string
+}
+
+interface Photo {
+  id: string
+  url: string
+  filename: string
+  uploadedAt: string
+  title?: string
+  year?: number | null
+  tags?: PhotoTag[]
+  comments?: Comment[]
+}
 
 interface PhotoModalProps {
   photo: Photo
@@ -20,7 +41,7 @@ interface PhotoModalProps {
   } | null
 }
 
-const PhotoModal: React.FC<PhotoModalProps> = ({ photo, onUpdate, onClose, user }) => {
+export function PhotoModal({ photo, onUpdate, onClose, user }: PhotoModalProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [isEditingYear, setIsEditingYear] = useState(false)
   const [title, setTitle] = useState(photo.title || "")
@@ -573,5 +594,3 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, onUpdate, onClose, user 
     </div>
   )
 }
-
-export default PhotoModal
