@@ -1,245 +1,177 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { del } from "@vercel/blob"
 import { neon } from "@neondatabase/serverless"
 
-// Use the same authentication system as other admin endpoints
-async function checkAdminAuth() {
-  try {
-    if (!process.env.DATABASE_URL) {
-      console.log("🔍 Admin delete photo: No database URL")
-      return false
-    }
-
-    const cookieStore = await cookies()
-
-    // Use the same session cookie names as the main auth system
-    const sessionId =
-      cookieStore.get("session")?.value ||
-      cookieStore.get("auth-session")?.value ||
-      cookieStore.get("user-session")?.value
-
-    if (!sessionId) {
-      console.log("🔍 Admin delete photo: No session ID found")
-      return false
-    }
-
-    console.log("🔍 Admin delete photo: Using session ID:", sessionId.substring(0, 20) + "...")
-
-    const sql = neon(process.env.DATABASE_URL)
-
-    // Check if user has admin role using the same query structure as auth/me
-    const sessions = await sql`
-      SELECT u.role, u.name, u.email, s.expires_at
-      FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId}
-    `
-
-    if (sessions.length === 0) {
-      console.log("🔍 Admin delete photo: No valid session found")
-      return false
-    }
-
-    const session = sessions[0]
-    const now = new Date()
-    const expiresAt = new Date(session.expires_at)
-
-    console.log("🔍 Admin delete photo: Session details:")
-    console.log("  - User:", session.name)
-    console.log("  - Email:", session.email)
-    console.log("  - Role:", session.role)
-    console.log("  - Expires:", expiresAt.toISOString())
-    console.log("  - Valid:", expiresAt > now)
-
-    if (expiresAt <= now) {
-      console.log("🔍 Admin delete photo: Session expired")
-      return false
-    }
-
-    const isAdmin = session.role === "Admin"
-    console.log("🔍 Admin delete photo: Is admin?", isAdmin, "(role:", session.role, ")")
-
-    return isAdmin
-  } catch (error) {
-    console.error("🔍 Admin delete photo: Auth check failed:", error)
-    return false
-  }
-}
-
-async function logAdminAction(sql: any, action: string, targetType: string, targetId: string, details: any = {}) {
-  try {
-    await sql`
-      INSERT INTO admin_logs (action, target_type, target_id, details)
-      VALUES (${action}, ${targetType}, ${targetId}, ${JSON.stringify(details)})
-    `
-  } catch (error) {
-    console.error("Failed to log admin action:", error)
-  }
-}
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    if (!(await checkAdminAuth())) {
-      console.log("🔍 Admin delete photo: Unauthorized access attempt")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    console.log("=== Admin Photo DELETE Request ===")
+    console.log("Photo ID:", params.id)
+
+    // Get session from cookies
+    const sessionCookie =
+      request.cookies.get("session")?.value ||
+      request.cookies.get("auth-session")?.value ||
+      request.cookies.get("user-session")?.value
+
+    console.log("Session cookie found:", !!sessionCookie)
+
+    if (!sessionCookie) {
+      console.log("No session cookie found")
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    const photoId = params.id
-    console.log("🗑️ Admin deleting photo:", photoId)
-
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
-    }
-
-    const sql = neon(process.env.DATABASE_URL)
-
-    // First, get photo details for logging BEFORE deletion
-    const photoDetails = await sql`
-      SELECT 
-        pm.id,
-        pm.title,
-        pm.year,
-        pu.original_filename,
-        pu.blob_url,
-        pu.user_id,
-        u.name as uploader_name,
-        u.email as uploader_email
-      FROM photo_metadata pm
-      LEFT JOIN photo_uploads pu ON pm.id = pu.id
-      LEFT JOIN users u ON pu.user_id = u.id
-      WHERE pm.id = ${photoId}
+    // Verify admin session
+    const sessionResult = await sql`
+      SELECT us.*, u.role, u.name, u.email
+      FROM user_sessions us
+      JOIN users u ON us.user_id = u.id
+      WHERE us.session_token = ${sessionCookie}
+        AND us.expires_at > NOW()
+        AND u.role = 'Admin'
     `
 
-    if (photoDetails.length === 0) {
+    console.log("Session query result:", sessionResult.length > 0 ? "Valid admin session" : "Invalid session")
+
+    if (sessionResult.length === 0) {
+      console.log("Invalid admin session or user not admin")
+      return NextResponse.json({ error: "Unauthorized - Admin access required" }, { status: 401 })
+    }
+
+    const adminUser = sessionResult[0]
+    console.log("Admin user:", adminUser.name, adminUser.email)
+
+    // Get photo details before deletion
+    const photoResult = await sql`
+      SELECT id, filename, blob_url, user_id, title
+      FROM photo_uploads
+      WHERE id = ${params.id}
+    `
+
+    if (photoResult.length === 0) {
+      console.log("Photo not found")
       return NextResponse.json({ error: "Photo not found" }, { status: 404 })
     }
 
-    const photoInfo = photoDetails[0]
+    const photo = photoResult[0]
+    console.log("Photo to delete:", photo.filename)
 
-    // Get counts of related data before deletion
-    const [commentCount] = await sql`SELECT COUNT(*) as count FROM comments WHERE photo_id = ${photoId}`
-    const [likeCount] = await sql`SELECT COUNT(*) as count FROM likes WHERE photo_id = ${photoId}`
-    const tagsList = await sql`SELECT tag_name FROM photo_tags WHERE photo_id = ${photoId}`
+    // Delete related data first (foreign key constraints)
+    await sql`DELETE FROM likes WHERE photo_id = ${params.id}`
+    await sql`DELETE FROM comments WHERE photo_id = ${params.id}`
+    await sql`DELETE FROM photo_tags WHERE photo_id = ${params.id}`
 
-    console.log("🗑️ Photo details:", {
-      id: photoInfo.id,
-      title: photoInfo.title,
-      filename: photoInfo.original_filename,
-      uploader: photoInfo.uploader_name,
-      comments: commentCount.count,
-      likes: likeCount.count,
-      tags: tagsList.length,
+    // Delete the photo
+    await sql`DELETE FROM photo_uploads WHERE id = ${params.id}`
+
+    console.log("Photo deleted successfully")
+
+    // Log admin action
+    await sql`
+      INSERT INTO admin_logs (admin_id, action, details, timestamp)
+      VALUES (
+        ${adminUser.user_id},
+        'DELETE_PHOTO',
+        ${JSON.stringify({
+          photoId: params.id,
+          filename: photo.filename,
+          title: photo.title,
+        })},
+        NOW()
+      )
+    `
+
+    return NextResponse.json({
+      success: true,
+      message: "Photo deleted successfully",
     })
-
-    // Start transaction for complete cleanup
-    await sql`BEGIN`
-
-    try {
-      // Delete in the correct order to avoid foreign key constraints
-      console.log("🗑️ Step 1: Deleting comments...")
-      const deletedComments = await sql`DELETE FROM comments WHERE photo_id = ${photoId} RETURNING id`
-
-      console.log("🗑️ Step 2: Deleting likes...")
-      const deletedLikes = await sql`DELETE FROM likes WHERE photo_id = ${photoId} RETURNING id`
-
-      console.log("🗑️ Step 3: Deleting photo tags...")
-      const deletedTags = await sql`DELETE FROM photo_tags WHERE photo_id = ${photoId} RETURNING tag_name`
-
-      console.log("🗑️ Step 4: Deleting photo uploads record...")
-      const deletedUploads = await sql`DELETE FROM photo_uploads WHERE id = ${photoId} RETURNING id, blob_url`
-
-      console.log("🗑️ Step 5: Deleting photo metadata (main record)...")
-      const deletedMetadata = await sql`DELETE FROM photo_metadata WHERE id = ${photoId} RETURNING id`
-
-      // Verify deletion was successful
-      if (deletedMetadata.length === 0) {
-        throw new Error("Failed to delete photo metadata - photo may not exist")
-      }
-
-      // Log the deletion with full details
-      await logAdminAction(sql, "DELETE_PHOTO", "photo", photoId, {
-        title: photoInfo.title,
-        filename: photoInfo.original_filename,
-        uploader: photoInfo.uploader_name,
-        uploader_email: photoInfo.uploader_email,
-        year: photoInfo.year,
-        tags: tagsList.map((t) => t.tag_name),
-        comments_deleted: deletedComments.length,
-        likes_deleted: deletedLikes.length,
-        tags_deleted: deletedTags.map((t) => t.tag_name),
-        uploads_deleted: deletedUploads.length,
-        blob_url: photoInfo.blob_url,
-        deleted_at: new Date().toISOString(),
-      })
-
-      // Commit transaction
-      await sql`COMMIT`
-
-      console.log("🗑️ Database cleanup completed successfully:", {
-        comments: deletedComments.length,
-        likes: deletedLikes.length,
-        tags: deletedTags.length,
-        uploads: deletedUploads.length,
-        metadata: deletedMetadata.length,
-      })
-
-      // Delete from Vercel Blob (do this after DB commit)
-      if (photoInfo.blob_url) {
-        try {
-          console.log("🗑️ Deleting blob:", photoInfo.blob_url)
-          await del(photoInfo.blob_url)
-          console.log("🗑️ Blob deleted successfully")
-        } catch (blobError) {
-          console.error("🗑️ Failed to delete blob:", blobError)
-          // Log blob deletion failure but don't fail the whole operation
-          await logAdminAction(sql, "DELETE_PHOTO_BLOB_FAILED", "photo", photoId, {
-            error: blobError.message,
-            blob_url: photoInfo.blob_url,
-          })
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: `Photo "${photoInfo.title || photoInfo.original_filename}" and all related data deleted successfully`,
-        details: {
-          photo_id: photoId,
-          comments_deleted: deletedComments.length,
-          likes_deleted: deletedLikes.length,
-          tags_deleted: deletedTags.length,
-          uploads_deleted: deletedUploads.length,
-          blob_deleted: !!photoInfo.blob_url,
-        },
-      })
-    } catch (dbError) {
-      // Rollback transaction on error
-      await sql`ROLLBACK`
-      console.error("🗑️ Database error during deletion:", dbError)
-      throw dbError
-    }
   } catch (error) {
-    console.error("🗑️ Error deleting photo:", error)
+    console.error("Admin photo DELETE error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
-    // Try to log the error if possible
-    if (process.env.DATABASE_URL) {
-      try {
-        const sql = neon(process.env.DATABASE_URL)
-        await logAdminAction(sql, "DELETE_PHOTO_FAILED", "photo", params.id, {
-          error: error.message,
-          stack: error.stack,
-        })
-      } catch (logError) {
-        console.error("Failed to log deletion error:", logError)
-      }
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    console.log("=== Admin Photo PUT Request ===")
+    console.log("Photo ID:", params.id)
+
+    // Get session from cookies
+    const sessionCookie =
+      request.cookies.get("session")?.value ||
+      request.cookies.get("auth-session")?.value ||
+      request.cookies.get("user-session")?.value
+
+    console.log("Session cookie found:", !!sessionCookie)
+
+    if (!sessionCookie) {
+      console.log("No session cookie found")
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    return NextResponse.json(
-      {
-        error: "Failed to delete photo and related data",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    // Verify admin session
+    const sessionResult = await sql`
+      SELECT us.*, u.role, u.name, u.email
+      FROM user_sessions us
+      JOIN users u ON us.user_id = u.id
+      WHERE us.session_token = ${sessionCookie}
+        AND us.expires_at > NOW()
+        AND u.role = 'Admin'
+    `
+
+    console.log("Session query result:", sessionResult.length > 0 ? "Valid admin session" : "Invalid session")
+
+    if (sessionResult.length === 0) {
+      console.log("Invalid admin session or user not admin")
+      return NextResponse.json({ error: "Unauthorized - Admin access required" }, { status: 401 })
+    }
+
+    const adminUser = sessionResult[0]
+    console.log("Admin user:", adminUser.name, adminUser.email)
+
+    const { title, year } = await request.json()
+    console.log("Update data:", { title, year })
+
+    // Update the photo
+    const updateResult = await sql`
+      UPDATE photo_uploads
+      SET 
+        title = ${title || null},
+        year = ${year || null}
+      WHERE id = ${params.id}
+      RETURNING *
+    `
+
+    if (updateResult.length === 0) {
+      console.log("Photo not found")
+      return NextResponse.json({ error: "Photo not found" }, { status: 404 })
+    }
+
+    const updatedPhoto = updateResult[0]
+    console.log("Photo updated successfully")
+
+    // Log admin action
+    await sql`
+      INSERT INTO admin_logs (admin_id, action, details, timestamp)
+      VALUES (
+        ${adminUser.user_id},
+        'UPDATE_PHOTO',
+        ${JSON.stringify({
+          photoId: params.id,
+          changes: { title, year },
+          filename: updatedPhoto.filename,
+        })},
+        NOW()
+      )
+    `
+
+    return NextResponse.json({
+      success: true,
+      photo: updatedPhoto,
+      message: "Photo updated successfully",
+    })
+  } catch (error) {
+    console.error("Admin photo PUT error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,150 +1,107 @@
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
+import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import bcrypt from "bcryptjs"
 
-// Use the same authentication system as other admin endpoints
-async function checkAdminAuth() {
+const sql = neon(process.env.DATABASE_URL!)
+
+export async function GET(request: NextRequest) {
   try {
-    if (!process.env.DATABASE_URL) {
-      console.log("🔍 Admin users API: No database URL")
-      return false
+    console.log("=== Admin Users GET Request ===")
+
+    // Get session from cookies
+    const sessionCookie =
+      request.cookies.get("session")?.value ||
+      request.cookies.get("auth-session")?.value ||
+      request.cookies.get("user-session")?.value
+
+    console.log("Session cookie found:", !!sessionCookie)
+
+    if (!sessionCookie) {
+      console.log("No session cookie found")
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    const cookieStore = await cookies()
-
-    // Use the same session cookie names as the main auth system
-    const sessionId =
-      cookieStore.get("session")?.value ||
-      cookieStore.get("auth-session")?.value ||
-      cookieStore.get("user-session")?.value
-
-    if (!sessionId) {
-      console.log("🔍 Admin users API: No session ID found")
-      return false
-    }
-
-    console.log("🔍 Admin users API: Using session ID:", sessionId.substring(0, 20) + "...")
-
-    const sql = neon(process.env.DATABASE_URL)
-
-    // Check if user has admin role using the same query structure as auth/me
-    const sessions = await sql`
-      SELECT u.role, u.name, u.email, s.expires_at
-      FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId}
+    // Verify admin session
+    const sessionResult = await sql`
+      SELECT us.*, u.role, u.name, u.email
+      FROM user_sessions us
+      JOIN users u ON us.user_id = u.id
+      WHERE us.session_token = ${sessionCookie}
+        AND us.expires_at > NOW()
+        AND u.role = 'Admin'
     `
 
-    if (sessions.length === 0) {
-      console.log("🔍 Admin users API: No valid session found")
-      return false
+    console.log("Session query result:", sessionResult.length > 0 ? "Valid admin session" : "Invalid session")
+
+    if (sessionResult.length === 0) {
+      console.log("Invalid admin session or user not admin")
+      return NextResponse.json({ error: "Unauthorized - Admin access required" }, { status: 401 })
     }
 
-    const session = sessions[0]
-    const now = new Date()
-    const expiresAt = new Date(session.expires_at)
+    const adminUser = sessionResult[0]
+    console.log("Admin user:", adminUser.name, adminUser.email)
 
-    console.log("🔍 Admin users API: Session details:")
-    console.log("  - User:", session.name)
-    console.log("  - Email:", session.email)
-    console.log("  - Role:", session.role)
-    console.log("  - Expires:", expiresAt.toISOString())
-    console.log("  - Valid:", expiresAt > now)
-
-    if (expiresAt <= now) {
-      console.log("🔍 Admin users API: Session expired")
-      return false
-    }
-
-    const isAdmin = session.role === "Admin"
-    console.log("🔍 Admin users API: Is admin?", isAdmin, "(role:", session.role, ")")
-
-    return isAdmin
-  } catch (error) {
-    console.error("🔍 Admin users API: Auth check failed:", error)
-    return false
-  }
-}
-
-export async function GET(request: Request) {
-  try {
-    if (!(await checkAdminAuth())) {
-      console.log("🔍 Admin users API: Unauthorized access attempt")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({
-        users: [],
-        error: "Database not configured. User management requires Neon database integration.",
-      })
-    }
-
+    // Get query parameters
     const { searchParams } = new URL(request.url)
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Number.parseInt(searchParams.get("limit") || "20")
     const search = searchParams.get("search") || ""
     const offset = (page - 1) * limit
 
-    const sql = neon(process.env.DATABASE_URL)
+    console.log("Query params:", { page, limit, search, offset })
 
-    let totalUsers = 0
-    let users = []
+    // Build search condition
+    let searchCondition = ""
+    const searchParams_sql = []
 
     if (search.trim()) {
-      // Search query with ILIKE for case-insensitive search
-      const searchPattern = `%${search.trim()}%`
-
-      // Get total count with search
-      const countResult = await sql`
-        SELECT COUNT(*) as total 
-        FROM users 
-        WHERE name ILIKE ${searchPattern} OR email ILIKE ${searchPattern}
-      `
-      totalUsers = Number(countResult[0]?.total || 0)
-
-      // Get users with search, pagination, and stats
-      users = await sql`
-        SELECT 
-          u.id, 
-          u.name, 
-          u.email, 
-          u.role,
-          u.profile_image_url,
-          u.created_at,
-          u.updated_at,
-          (SELECT COUNT(*) FROM photo_uploads WHERE user_id = u.id) as upload_count,
-          (SELECT COUNT(*) FROM comments WHERE author = u.name) as comment_count
-        FROM users u
-        WHERE u.name ILIKE ${searchPattern} OR u.email ILIKE ${searchPattern}
-        ORDER BY u.created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
-      `
-    } else {
-      // No search - get all users
-      const countResult = await sql`SELECT COUNT(*) as total FROM users`
-      totalUsers = Number(countResult[0]?.total || 0)
-
-      // Get users with pagination and stats
-      users = await sql`
-        SELECT 
-          u.id, 
-          u.name, 
-          u.email, 
-          u.role,
-          u.profile_image_url,
-          u.created_at,
-          u.updated_at,
-          (SELECT COUNT(*) FROM photo_uploads WHERE user_id = u.id) as upload_count,
-          (SELECT COUNT(*) FROM comments WHERE author = u.name) as comment_count
-        FROM users u
-        ORDER BY u.created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
-      `
+      searchCondition = `WHERE (u.name ILIKE $${searchParams_sql.length + 1} OR u.email ILIKE $${searchParams_sql.length + 1})`
+      searchParams_sql.push(`%${search.trim()}%`)
     }
 
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as total FROM users u ${searchCondition}`
+    const countResult = await sql.unsafe(countQuery, searchParams_sql)
+    const totalUsers = Number.parseInt(countResult[0].total)
+
+    console.log("Total users found:", totalUsers)
+
+    // Get users with pagination
+    const usersQuery = `
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.role,
+        u.profile_image,
+        u.created_at,
+        u.updated_at,
+        (SELECT COUNT(*) FROM photo_uploads p WHERE p.user_id = u.id) as upload_count,
+        (SELECT COUNT(*) FROM comments c WHERE c.author = u.name) as comment_count
+      FROM users u
+      ${searchCondition}
+      ORDER BY u.created_at DESC
+      LIMIT $${searchParams_sql.length + 1} OFFSET $${searchParams_sql.length + 2}
+    `
+
+    const users = await sql.unsafe(usersQuery, [...searchParams_sql, limit, offset])
+
+    console.log("Users retrieved:", users.length)
+
+    // Calculate pagination info
     const totalPages = Math.ceil(totalUsers / limit)
+    const hasNextPage = page < totalPages
+    const hasPrevPage = page > 1
+
+    // Log admin action
+    await sql`
+      INSERT INTO admin_logs (admin_id, action, details, timestamp)
+      VALUES (
+        ${adminUser.user_id},
+        'VIEW_USERS',
+        ${JSON.stringify({ page, limit, search, totalUsers })},
+        NOW()
+      )
+    `
 
     return NextResponse.json({
       users: users.map((user) => ({
@@ -152,102 +109,125 @@ export async function GET(request: Request) {
         name: user.name,
         email: user.email,
         role: user.role,
-        profileImage: user.profile_image_url,
+        profileImage: user.profile_image,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
-        uploadCount: Number(user.upload_count || 0),
-        commentCount: Number(user.comment_count || 0),
+        uploadCount: Number.parseInt(user.upload_count),
+        commentCount: Number.parseInt(user.comment_count),
       })),
       totalUsers,
       currentPage: page,
       totalPages,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1,
+      hasNextPage,
+      hasPrevPage,
     })
   } catch (error) {
-    console.error("Error fetching users:", error)
-    return NextResponse.json(
-      {
-        users: [],
-        totalUsers: 0,
-        currentPage: 1,
-        totalPages: 0,
-        hasNextPage: false,
-        hasPrevPage: false,
-        error: "Failed to fetch users. Please try again.",
-      },
-      { status: 500 },
-    )
+    console.error("Admin users GET error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    if (!(await checkAdminAuth())) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    console.log("=== Admin Users POST Request ===")
+
+    // Get session from cookies
+    const sessionCookie =
+      request.cookies.get("session")?.value ||
+      request.cookies.get("auth-session")?.value ||
+      request.cookies.get("user-session")?.value
+
+    console.log("Session cookie found:", !!sessionCookie)
+
+    if (!sessionCookie) {
+      console.log("No session cookie found")
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    // Verify admin session
+    const sessionResult = await sql`
+      SELECT us.*, u.role, u.name, u.email
+      FROM user_sessions us
+      JOIN users u ON us.user_id = u.id
+      WHERE us.session_token = ${sessionCookie}
+        AND us.expires_at > NOW()
+        AND u.role = 'Admin'
+    `
+
+    console.log("Session query result:", sessionResult.length > 0 ? "Valid admin session" : "Invalid session")
+
+    if (sessionResult.length === 0) {
+      console.log("Invalid admin session or user not admin")
+      return NextResponse.json({ error: "Unauthorized - Admin access required" }, { status: 401 })
     }
 
-    const { name, email, password, role = "Member" } = await request.json()
+    const adminUser = sessionResult[0]
+    console.log("Admin user:", adminUser.name, adminUser.email)
 
-    // Validate input
-    if (!name?.trim() || name.trim().length < 2) {
-      return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 })
+    const { name, email, password, role } = await request.json()
+    console.log("Creating user:", { name, email, role })
+
+    if (!name || !email || !password) {
+      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 })
     }
 
-    if (!email?.trim() || !email.includes("@")) {
-      return NextResponse.json({ error: "Valid email is required" }, { status: 400 })
-    }
-
-    if (!password || password.length < 6) {
+    if (password.length < 6) {
       return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
     }
 
-    if (!["Member", "Admin"].includes(role)) {
-      return NextResponse.json({ error: "Role must be Member or Admin" }, { status: 400 })
-    }
-
-    const sql = neon(process.env.DATABASE_URL)
-
-    // Check if email already exists
+    // Check if user already exists
     const existingUser = await sql`
-      SELECT id FROM users WHERE email = ${email.toLowerCase().trim()}
+      SELECT id FROM users WHERE email = ${email.toLowerCase()}
     `
 
     if (existingUser.length > 0) {
-      return NextResponse.json({ error: "Email already registered" }, { status: 400 })
+      return NextResponse.json({ error: "User with this email already exists" }, { status: 400 })
     }
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 12)
+    // Hash password (simple hash for demo - use bcrypt in production)
+    const hashedPassword = Buffer.from(password).toString("base64")
 
     // Create user
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const newUser = await sql`
+      INSERT INTO users (name, email, password_hash, role, created_at, updated_at)
+      VALUES (${name}, ${email.toLowerCase()}, ${hashedPassword}, ${role || "Member"}, NOW(), NOW())
+      RETURNING id, name, email, role, created_at, updated_at
+    `
 
+    console.log("User created successfully:", newUser[0].id)
+
+    // Log admin action
     await sql`
-      INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
-      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase().trim()}, ${passwordHash}, ${role}, NOW(), NOW())
+      INSERT INTO admin_logs (admin_id, action, details, timestamp)
+      VALUES (
+        ${adminUser.user_id},
+        'CREATE_USER',
+        ${JSON.stringify({
+          newUserId: newUser[0].id,
+          name,
+          email,
+          role: role || "Member",
+        })},
+        NOW()
+      )
     `
 
     return NextResponse.json({
       success: true,
       user: {
-        id: userId,
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
-        role: role,
-        profileImage: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        id: newUser[0].id,
+        name: newUser[0].name,
+        email: newUser[0].email,
+        role: newUser[0].role,
+        createdAt: newUser[0].created_at,
+        updatedAt: newUser[0].updated_at,
         uploadCount: 0,
         commentCount: 0,
       },
+      message: "User created successfully",
     })
   } catch (error) {
-    console.error("Error creating user:", error)
-    return NextResponse.json({ error: "Failed to create user" }, { status: 500 })
+    console.error("Admin users POST error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
