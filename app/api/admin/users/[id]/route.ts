@@ -1,102 +1,89 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
+async function getAdminUser(sessionToken: string) {
+  if (!process.env.DATABASE_URL) return null
+
+  const sql = neon(process.env.DATABASE_URL)
+
+  const sessions = await sql`
+    SELECT s.*, u.name, u.email, u.role
+    FROM user_sessions s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.session_token = ${sessionToken}
+    AND s.expires_at > NOW()
+    AND u.role = 'Admin'
+  `
+
+  return sessions.length > 0 ? sessions[0] : null
+}
+
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("👤 Admin user get: Fetching user ID:", params.id)
+    const userId = params.id
 
-    // Check authentication
-    const cookies = request.headers.get("cookie")
-    if (!cookies) {
+    // Check admin authentication
+    const sessionToken = request.cookies.get("session_token")?.value
+    if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const sessionMatch = cookies.match(/session=([^;]+)/)
-    if (!sessionMatch) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const sessionId = sessionMatch[1]
-    const sql = neon(process.env.DATABASE_URL!)
-
-    // Verify admin access
-    const adminCheck = await sql`
-      SELECT u.role
-      FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId} AND s.expires_at > NOW() AND u.role = 'Admin'
-    `
-
-    if (adminCheck.length === 0) {
+    const adminUser = await getAdminUser(sessionToken)
+    if (!adminUser) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     }
 
-    // Get user data including role
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
+
     const users = await sql`
-      SELECT id, name, email, role, profile_image, created_at
+      SELECT id, name, email, role, created_at, profile_image
       FROM users 
-      WHERE id = ${params.id}
+      WHERE id = ${userId}
     `
 
     if (users.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const user = users[0]
-    console.log("👤 Admin user get: Found user:", user.name, "Role:", user.role)
-
-    return NextResponse.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role, // Make sure role is included
-      profileImage: user.profile_image,
-      createdAt: user.created_at,
-    })
+    return NextResponse.json({ user: users[0] })
   } catch (error) {
-    console.error("👤 Admin user get: Error:", error)
+    console.error("Error fetching user:", error)
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("👤 Admin user update: Starting update for user ID:", params.id)
-
+    const userId = params.id
     const body = await request.json()
-    console.log("👤 Admin user update: Update data:", body)
 
-    // Check authentication
-    const cookies = request.headers.get("cookie")
-    if (!cookies) {
+    console.log(`👤 Admin updating user ${userId}:`, body)
+
+    // Check admin authentication
+    const sessionToken = request.cookies.get("session_token")?.value
+    if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const sessionMatch = cookies.match(/session=([^;]+)/)
-    if (!sessionMatch) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const sessionId = sessionMatch[1]
-    const sql = neon(process.env.DATABASE_URL!)
-
-    // Verify admin access
-    const adminCheck = await sql`
-      SELECT u.role, u.name
-      FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId} AND s.expires_at > NOW() AND u.role = 'Admin'
-    `
-
-    if (adminCheck.length === 0) {
+    const adminUser = await getAdminUser(sessionToken)
+    if (!adminUser) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     }
 
-    console.log("👤 Admin user update: Admin user:", adminCheck[0].name)
+    console.log(`👤 Admin ${adminUser.email} authorized for user update`)
+
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
 
     // Validate role if provided
     if (body.role && !["Admin", "Member"].includes(body.role)) {
-      console.log("👤 Admin user update: Invalid role:", body.role)
       return NextResponse.json({ error: "Invalid role. Must be 'Admin' or 'Member'" }, { status: 400 })
     }
 
@@ -104,121 +91,151 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const updates = []
     const values = []
 
-    if (body.name) {
+    if (body.name !== undefined) {
       updates.push(`name = $${updates.length + 1}`)
       values.push(body.name)
     }
 
-    if (body.email) {
+    if (body.email !== undefined) {
       updates.push(`email = $${updates.length + 1}`)
       values.push(body.email)
     }
 
-    if (body.role) {
+    if (body.role !== undefined) {
       updates.push(`role = $${updates.length + 1}`)
       values.push(body.role)
-      console.log("👤 Admin user update: Setting role to:", body.role)
+      console.log(`👤 Setting role to: ${body.role}`)
     }
 
     if (updates.length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
     }
 
-    // Add user ID as the last parameter
-    values.push(params.id)
+    // Add userId to values
+    values.push(userId)
 
-    const updateQuery = `UPDATE users SET ${updates.join(", ")} WHERE id = $${values.length}`
-    console.log("👤 Admin user update: Query:", updateQuery)
-    console.log("👤 Admin user update: Values:", values)
-
-    await sql.unsafe(updateQuery, values)
-
-    // Verify the update by fetching the user
-    const updatedUsers = await sql`
-      SELECT id, name, email, role, profile_image, created_at
-      FROM users 
-      WHERE id = ${params.id}
+    // Execute update
+    const updateQuery = `
+      UPDATE users 
+      SET ${updates.join(", ")} 
+      WHERE id = $${values.length}
+      RETURNING id, name, email, role, created_at, profile_image
     `
 
+    console.log(`👤 Executing query: ${updateQuery}`)
+    console.log(`👤 With values:`, values)
+
+    const updatedUsers = await sql.unsafe(updateQuery, values)
+
     if (updatedUsers.length === 0) {
-      return NextResponse.json({ error: "User not found after update" }, { status: 404 })
+      return NextResponse.json({ error: "User not found or update failed" }, { status: 404 })
     }
 
     const updatedUser = updatedUsers[0]
-    console.log("👤 Admin user update: Updated user:", updatedUser.name, "New role:", updatedUser.role)
+    console.log(`👤 User updated successfully:`, updatedUser)
 
-    // Log the action
-    await sql`
-      INSERT INTO admin_logs (admin_id, action, details, created_at)
-      VALUES (
-        (SELECT user_id FROM user_sessions WHERE id = ${sessionId}),
-        'update_user',
-        ${JSON.stringify({ userId: params.id, updates: body, newRole: updatedUser.role })},
-        NOW()
-      )
+    // Verify the update by fetching the user again
+    const verifyUsers = await sql`
+      SELECT id, name, email, role, created_at, profile_image
+      FROM users 
+      WHERE id = ${userId}
     `
 
+    console.log(`👤 Verification fetch:`, verifyUsers[0])
+
+    // Log the admin action
+    try {
+      await sql`
+        INSERT INTO admin_logs (id, admin_id, action, target_type, target_id, details, created_at)
+        VALUES (
+          ${`log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`},
+          ${adminUser.user_id},
+          'UPDATE_USER',
+          'user',
+          ${userId},
+          ${JSON.stringify({ changes: body })},
+          NOW()
+        )
+      `
+    } catch (logError) {
+      console.log("👤 Failed to log admin action:", logError)
+    }
+
     return NextResponse.json({
-      id: updatedUser.id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      role: updatedUser.role,
-      profileImage: updatedUser.profile_image,
-      createdAt: updatedUser.created_at,
+      user: updatedUser,
+      message: "User updated successfully",
     })
   } catch (error) {
-    console.error("👤 Admin user update: Error:", error)
-    return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
+    console.error("👤 Error updating user:", error)
+    return NextResponse.json({ error: "Failed to update user", details: error.message }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Check authentication
-    const cookies = request.headers.get("cookie")
-    if (!cookies) {
+    const userId = params.id
+
+    // Check admin authentication
+    const sessionToken = request.cookies.get("session_token")?.value
+    if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const sessionMatch = cookies.match(/session=([^;]+)/)
-    if (!sessionMatch) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const sessionId = sessionMatch[1]
-    const sql = neon(process.env.DATABASE_URL!)
-
-    // Verify admin access
-    const adminCheck = await sql`
-      SELECT u.role
-      FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId} AND s.expires_at > NOW() AND u.role = 'Admin'
-    `
-
-    if (adminCheck.length === 0) {
+    const adminUser = await getAdminUser(sessionToken)
+    if (!adminUser) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     }
 
-    // Delete user and related data
-    await sql`DELETE FROM user_sessions WHERE user_id = ${params.id}`
-    await sql`DELETE FROM photo_uploads WHERE user_id = ${params.id}`
-    await sql`DELETE FROM users WHERE id = ${params.id}`
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    }
 
-    // Log the deletion
-    await sql`
-      INSERT INTO admin_logs (admin_id, action, details, created_at)
-      VALUES (
-        (SELECT user_id FROM user_sessions WHERE id = ${sessionId}),
-        'delete_user',
-        ${JSON.stringify({ userId: params.id })},
-        NOW()
-      )
+    const sql = neon(process.env.DATABASE_URL)
+
+    // Don't allow admin to delete themselves
+    if (userId === adminUser.user_id) {
+      return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 })
+    }
+
+    // Delete user and related data
+    await sql`DELETE FROM user_sessions WHERE user_id = ${userId}`
+    await sql`DELETE FROM photo_uploads WHERE user_id = ${userId}`
+
+    const deletedUsers = await sql`
+      DELETE FROM users 
+      WHERE id = ${userId}
+      RETURNING id, name, email
     `
 
-    return NextResponse.json({ success: true })
+    if (deletedUsers.length === 0) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // Log the admin action
+    try {
+      await sql`
+        INSERT INTO admin_logs (id, admin_id, action, target_type, target_id, details, created_at)
+        VALUES (
+          ${`log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`},
+          ${adminUser.user_id},
+          'DELETE_USER',
+          'user',
+          ${userId},
+          ${JSON.stringify({ deletedUser: deletedUsers[0] })},
+          NOW()
+        )
+      `
+    } catch (logError) {
+      console.log("Failed to log admin action:", logError)
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "User deleted successfully",
+      deletedUser: deletedUsers[0],
+    })
   } catch (error) {
     console.error("Error deleting user:", error)
-    return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to delete user", details: error.message }, { status: 500 })
   }
 }

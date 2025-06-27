@@ -4,81 +4,80 @@ import { neon } from "@neondatabase/serverless"
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const photoId = params.id
+    console.log(`📊 Fetching metadata for photo: ${photoId}`)
 
     if (!process.env.DATABASE_URL) {
-      return NextResponse.json({
-        title: "",
-        year: null,
-        tags: [],
-        comments: [],
-        likes: [],
-        error: "Database not configured. Comments, likes, year, and tags require Neon database integration.",
-      })
+      console.log("📊 No database configured")
+      return NextResponse.json(
+        {
+          title: "",
+          year: null,
+          tags: [],
+          comments: [],
+          likes: 0,
+          hasLiked: false,
+          error: "Database not configured",
+        },
+        { status: 200 },
+      )
     }
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Create tables if they don't exist - WITHOUT foreign key constraints for now
-    await sql`
-      CREATE TABLE IF NOT EXISTS photo_metadata (
-        id TEXT PRIMARY KEY,
-        title TEXT DEFAULT '',
-        year INTEGER,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS comments (
-        id TEXT PRIMARY KEY,
-        photo_id TEXT NOT NULL,
-        author TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS likes (
-        id TEXT PRIMARY KEY,
-        photo_id TEXT NOT NULL,
-        author TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(photo_id, author)
-      )
-    `
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS tags (
-        id TEXT PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS photo_tags (
-        id TEXT PRIMARY KEY,
-        photo_id TEXT NOT NULL,
-        tag_id TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(photo_id, tag_id)
-      )
-    `
-
-    // Create indexes for better performance
+    // Create tables if they don't exist
     try {
-      await sql`CREATE INDEX IF NOT EXISTS idx_comments_photo_id ON comments(photo_id)`
-      await sql`CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at)`
-      await sql`CREATE INDEX IF NOT EXISTS idx_likes_photo_id ON likes(photo_id)`
-      await sql`CREATE INDEX IF NOT EXISTS idx_likes_created_at ON likes(created_at)`
-      await sql`CREATE INDEX IF NOT EXISTS idx_photo_tags_photo_id ON photo_tags(photo_id)`
-      await sql`CREATE INDEX IF NOT EXISTS idx_photo_tags_tag_id ON photo_tags(tag_id)`
-    } catch (indexError) {
-      console.log("Indexes may already exist")
+      await sql`
+        CREATE TABLE IF NOT EXISTS photo_metadata (
+          id TEXT PRIMARY KEY,
+          title TEXT DEFAULT '',
+          year INTEGER,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS comments (
+          id TEXT PRIMARY KEY,
+          photo_id TEXT NOT NULL,
+          author TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS likes (
+          id TEXT PRIMARY KEY,
+          photo_id TEXT NOT NULL,
+          author TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(photo_id, author)
+        )
+      `
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS tags (
+          id TEXT PRIMARY KEY,
+          name TEXT UNIQUE NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS photo_tags (
+          id TEXT PRIMARY KEY,
+          photo_id TEXT NOT NULL,
+          tag_id TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(photo_id, tag_id)
+        )
+      `
+    } catch (tableError) {
+      console.log("📊 Tables may already exist:", tableError.message)
     }
 
-    const [metadata, comments, likes, photoTags] = await Promise.all([
+    // Fetch all metadata in parallel with error handling
+    const [metadata, comments, likes, photoTags] = await Promise.allSettled([
       sql`SELECT * FROM photo_metadata WHERE id = ${photoId}`,
       sql`SELECT * FROM comments WHERE photo_id = ${photoId} ORDER BY created_at ASC`,
       sql`SELECT * FROM likes WHERE photo_id = ${photoId} ORDER BY created_at ASC`,
@@ -91,36 +90,50 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       `,
     ])
 
-    return NextResponse.json({
-      title: metadata[0]?.title || "",
-      year: metadata[0]?.year || null,
-      tags: photoTags.map((tag) => ({
-        id: tag.id,
-        name: tag.name,
-      })),
-      comments: comments.map((c) => ({
-        id: c.id,
-        author: c.author,
-        content: c.content,
-        timestamp: c.created_at,
-      })),
-      likes: likes.map((l) => ({
-        id: l.id,
-        author: l.author,
-        timestamp: l.created_at,
-      })),
-    })
+    // Process results safely
+    const metadataResult = metadata.status === "fulfilled" ? metadata.value : []
+    const commentsResult = comments.status === "fulfilled" ? comments.value : []
+    const likesResult = likes.status === "fulfilled" ? likes.value : []
+    const tagsResult = photoTags.status === "fulfilled" ? photoTags.value : []
+
+    console.log(
+      `📊 Photo ${photoId} - Comments: ${commentsResult.length}, Likes: ${likesResult.length}, Tags: ${tagsResult.length}`,
+    )
+
+    return NextResponse.json(
+      {
+        title: metadataResult[0]?.title || "",
+        year: metadataResult[0]?.year || null,
+        tags: tagsResult.map((tag) => ({
+          id: tag.id,
+          name: tag.name,
+        })),
+        comments: commentsResult.map((c) => ({
+          id: c.id,
+          author: c.author,
+          content: c.content,
+          timestamp: c.created_at,
+        })),
+        likes: likesResult.length,
+        hasLiked: false, // TODO: Check if current user has liked
+      },
+      { status: 200 },
+    )
   } catch (error) {
-    console.error("Error fetching metadata:", error)
-    return NextResponse.json({
-      title: "",
-      year: null,
-      tags: [],
-      comments: [],
-      likes: [],
-      error: "Failed to load metadata. Database may not be configured properly.",
-      details: error instanceof Error ? error.message : "Unknown error",
-    })
+    console.error("📊 Error fetching metadata:", error)
+    // Always return 200 with safe defaults to avoid JSON parsing issues
+    return NextResponse.json(
+      {
+        title: "",
+        year: null,
+        tags: [],
+        comments: [],
+        likes: 0,
+        hasLiked: false,
+        error: "Failed to load metadata",
+      },
+      { status: 200 },
+    )
   }
 }
 
@@ -132,89 +145,78 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`🏷️ Tag operation for photo: "${photoId}"`, body)
 
     if (!process.env.DATABASE_URL) {
-      return NextResponse.json(
-        {
-          error: "Database not configured. Please add Neon database integration to save metadata.",
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Ensure tables exist - WITHOUT foreign key constraints for now
-    await sql`
-      CREATE TABLE IF NOT EXISTS photo_metadata (
-        id TEXT PRIMARY KEY,
-        title TEXT DEFAULT '',
-        year INTEGER,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `
+    // Ensure tables exist
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS photo_metadata (
+          id TEXT PRIMARY KEY,
+          title TEXT DEFAULT '',
+          year INTEGER,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `
 
-    await sql`
-      CREATE TABLE IF NOT EXISTS comments (
-        id TEXT PRIMARY KEY,
-        photo_id TEXT NOT NULL,
-        author TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `
+      await sql`
+        CREATE TABLE IF NOT EXISTS comments (
+          id TEXT PRIMARY KEY,
+          photo_id TEXT NOT NULL,
+          author TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `
 
-    await sql`
-      CREATE TABLE IF NOT EXISTS likes (
-        id TEXT PRIMARY KEY,
-        photo_id TEXT NOT NULL,
-        author TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(photo_id, author)
-      )
-    `
+      await sql`
+        CREATE TABLE IF NOT EXISTS likes (
+          id TEXT PRIMARY KEY,
+          photo_id TEXT NOT NULL,
+          author TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(photo_id, author)
+        )
+      `
 
-    await sql`
-      CREATE TABLE IF NOT EXISTS tags (
-        id TEXT PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `
+      await sql`
+        CREATE TABLE IF NOT EXISTS tags (
+          id TEXT PRIMARY KEY,
+          name TEXT UNIQUE NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `
 
-    await sql`
-      CREATE TABLE IF NOT EXISTS photo_tags (
-        id TEXT PRIMARY KEY,
-        photo_id TEXT NOT NULL,
-        tag_id TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(photo_id, tag_id)
-      )
-    `
+      await sql`
+        CREATE TABLE IF NOT EXISTS photo_tags (
+          id TEXT PRIMARY KEY,
+          photo_id TEXT NOT NULL,
+          tag_id TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(photo_id, tag_id)
+        )
+      `
+    } catch (tableError) {
+      console.log("🏷️ Tables may already exist")
+    }
 
     if (body.action === "setTitle") {
-      try {
-        await sql`
-          INSERT INTO photo_metadata (id, title) 
-          VALUES (${photoId}, ${body.title})
-          ON CONFLICT (id) DO UPDATE SET title = ${body.title}
-        `
-      } catch (upsertError) {
-        console.error("Title update failed:", upsertError)
-        return NextResponse.json({ error: "Failed to save title" }, { status: 500 })
-      }
+      await sql`
+        INSERT INTO photo_metadata (id, title) 
+        VALUES (${photoId}, ${body.title})
+        ON CONFLICT (id) DO UPDATE SET title = ${body.title}
+      `
       return NextResponse.json({ success: true, title: body.title })
     }
 
     if (body.action === "setYear") {
-      try {
-        await sql`
-          INSERT INTO photo_metadata (id, year) 
-          VALUES (${photoId}, ${body.year})
-          ON CONFLICT (id) DO UPDATE SET year = ${body.year}
-        `
-      } catch (upsertError) {
-        console.error("Year update failed:", upsertError)
-        return NextResponse.json({ error: "Failed to save year" }, { status: 500 })
-      }
+      await sql`
+        INSERT INTO photo_metadata (id, year) 
+        VALUES (${photoId}, ${body.year})
+        ON CONFLICT (id) DO UPDATE SET year = ${body.year}
+      `
       return NextResponse.json({ success: true, year: body.year })
     }
 
@@ -222,94 +224,48 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const tagName = body.tagName.trim().toLowerCase()
       const tagId = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
+      // Insert tag if it doesn't exist
+      await sql`
+        INSERT INTO tags (id, name) 
+        VALUES (${tagId}, ${tagName})
+        ON CONFLICT (name) DO NOTHING
+      `
+
+      // Get the tag ID
+      const existingTag = await sql`SELECT id FROM tags WHERE name = ${tagName}`
+      const finalTagId = existingTag[0]?.id || tagId
+
+      // Link photo to tag
+      const photoTagId = `pt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
       try {
-        console.log(`🏷️ Adding tag "${tagName}" to photo "${photoId}"`)
-
-        // Get all photos for debugging
-        const allPhotos = await sql`SELECT id FROM photo_uploads LIMIT 20`
-        console.log(`📋 Available photos in database:`)
-        allPhotos.forEach((photo, index) => {
-          console.log(`   ${index + 1}. "${photo.id}"`)
-        })
-
-        // For now, let's use the photoId as-is and see what happens
-        // We'll add validation but not strict foreign key enforcement
-        console.log(`🏷️ Using photo ID as provided: "${photoId}"`)
-
-        // Insert tag if it doesn't exist
         await sql`
-          INSERT INTO tags (id, name) 
-          VALUES (${tagId}, ${tagName})
-          ON CONFLICT (name) DO NOTHING
+          INSERT INTO photo_tags (id, photo_id, tag_id, created_at) 
+          VALUES (${photoTagId}, ${photoId}, ${finalTagId}, NOW())
         `
-
-        // Get the tag ID (either newly created or existing)
-        const existingTag = await sql`SELECT id FROM tags WHERE name = ${tagName}`
-        const finalTagId = existingTag[0]?.id || tagId
-
-        console.log(`🏷️ Using tag ID: ${finalTagId} for tag: ${tagName}`)
-
-        // Link photo to tag - this should work now without foreign key constraint
-        const photoTagId = `pt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-        // Check if this combination already exists
-        const existingPhotoTag = await sql`
-          SELECT id FROM photo_tags 
-          WHERE photo_id = ${photoId} AND tag_id = ${finalTagId}
-        `
-
-        if (existingPhotoTag.length > 0) {
-          console.log(`ℹ️ Tag "${tagName}" already exists for photo "${photoId}"`)
+      } catch (error) {
+        if (error.message.includes("UNIQUE")) {
           return NextResponse.json({
             success: true,
             tag: { id: finalTagId, name: tagName },
             message: "Tag already exists for this photo",
           })
         }
-
-        await sql`
-          INSERT INTO photo_tags (id, photo_id, tag_id, created_at) 
-          VALUES (${photoTagId}, ${photoId}, ${finalTagId}, NOW())
-        `
-
-        console.log(`✅ Successfully linked photo "${photoId}" to tag "${finalTagId}"`)
-
-        return NextResponse.json({
-          success: true,
-          tag: { id: finalTagId, name: tagName },
-          photoId: photoId,
-        })
-      } catch (error) {
-        console.error("Tag add failed:", error)
-        console.error("Error details:", {
-          photoId,
-          tagName,
-          errorMessage: error.message,
-          errorStack: error.stack,
-        })
-        return NextResponse.json(
-          {
-            error: "Failed to add tag",
-            details: error.message,
-            photoId: photoId,
-            tagName: tagName,
-          },
-          { status: 500 },
-        )
+        throw error
       }
+
+      return NextResponse.json({
+        success: true,
+        tag: { id: finalTagId, name: tagName },
+      })
     }
 
     if (body.action === "removeTag") {
-      try {
-        await sql`
-          DELETE FROM photo_tags 
-          WHERE photo_id = ${photoId} AND tag_id = ${body.tagId}
-        `
-        return NextResponse.json({ success: true })
-      } catch (error) {
-        console.error("Tag remove failed:", error)
-        return NextResponse.json({ error: "Failed to remove tag" }, { status: 500 })
-      }
+      await sql`
+        DELETE FROM photo_tags 
+        WHERE photo_id = ${photoId} AND tag_id = ${body.tagId}
+      `
+      return NextResponse.json({ success: true })
     }
 
     if (body.action === "addComment") {
@@ -357,8 +313,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
         return NextResponse.json({ success: true, like: newLike })
       } catch (error) {
-        // Handle duplicate like (user already liked this photo)
-        if (error instanceof Error && error.message.includes("UNIQUE")) {
+        if (error.message.includes("UNIQUE")) {
           return NextResponse.json({ error: "You already loved this photo" }, { status: 400 })
         }
         throw error
@@ -372,13 +327,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error) {
-    console.error("Error updating metadata:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to save. Please ensure Neon database is properly configured.",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    console.error("🏷️ Error updating metadata:", error)
+    return NextResponse.json({ error: "Failed to save metadata" }, { status: 500 })
   }
 }

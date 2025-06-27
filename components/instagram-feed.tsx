@@ -50,9 +50,6 @@ export function InstagramFeed({ user, filters = {} }: InstagramFeedProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [photoStats, setPhotoStats] = useState<Record<string, { likes: number; comments: number; hasLiked: boolean }>>(
-    {},
-  )
 
   useEffect(() => {
     fetchPhotos()
@@ -64,11 +61,11 @@ export function InstagramFeed({ user, filters = {} }: InstagramFeedProps) {
       const params = new URLSearchParams()
 
       // Safely access filters properties
-      if (filters.year && filters.year !== "all") {
+      if (filters?.year && filters.year !== "all") {
         params.append("year", filters.year)
       }
 
-      if (filters.tags && filters.tags.length > 0) {
+      if (filters?.tags && filters.tags.length > 0) {
         params.append("tags", filters.tags.join(","))
       }
 
@@ -79,11 +76,6 @@ export function InstagramFeed({ user, filters = {} }: InstagramFeedProps) {
       if (response.ok) {
         const data = await response.json()
         setPhotos(data.photos || [])
-
-        // Fetch stats for each photo
-        if (data.photos) {
-          data.photos.forEach((photo: Photo) => fetchPhotoStats(photo))
-        }
       } else {
         console.error("Failed to fetch photos")
         setPhotos([])
@@ -96,46 +88,23 @@ export function InstagramFeed({ user, filters = {} }: InstagramFeedProps) {
     }
   }
 
-  const fetchPhotoStats = async (photo: Photo) => {
-    try {
-      const response = await fetch(`/api/photos/${photo.id}/metadata`)
-      if (response.ok) {
-        const data = await response.json()
-        setPhotoStats((prev) => ({
-          ...prev,
-          [photo.id]: {
-            likes: data.likes || 0,
-            comments: data.comments?.length || 0,
-            hasLiked: data.hasLiked || false,
-          },
-        }))
-      }
-    } catch (error) {
-      console.error("Error fetching photo stats:", error)
-    }
-  }
-
   const handleLike = async (photo: Photo, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!user) return
 
     try {
-      const response = await fetch(`/api/photos/${photo.id}/like`, {
+      const response = await fetch(`/api/photos/${photo.id}/metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ author: user.name }),
+        body: JSON.stringify({
+          action: "addLike",
+          author: user.name,
+        }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setPhotoStats((prev) => ({
-          ...prev,
-          [photo.id]: {
-            ...prev[photo.id],
-            likes: data.likes,
-            hasLiked: data.hasLiked,
-          },
-        }))
+        // Refresh photos to get updated like count
+        fetchPhotos()
       }
     } catch (error) {
       console.error("Error liking photo:", error)
@@ -220,135 +189,129 @@ export function InstagramFeed({ user, filters = {} }: InstagramFeedProps) {
 
       {/* Photo Grid - 4 columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {photos.map((photo) => {
-          const stats = photoStats[photo.id] || { likes: 0, comments: 0, hasLiked: false }
-
-          return (
-            <Card
-              key={photo.id}
-              className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group"
-              onClick={() => openModal(photo)}
-            >
-              {/* Photo Header */}
-              <div className="flex items-center justify-between p-4 pb-2">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
-                    {photo.uploaderProfileImage ? (
-                      <Image
-                        src={photo.uploaderProfileImage || "/placeholder.svg"}
-                        alt={photo.uploaderName || "User"}
-                        width={32}
-                        height={32}
-                        className="w-full h-full object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <User className="h-4 w-4 text-gray-400" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm text-gray-800">{photo.uploaderName || "Anonymous"}</p>
-                    {photo.uploaded_at && <p className="text-xs text-gray-500">{formatDate(photo.uploaded_at)}</p>}
-                  </div>
+        {photos.map((photo) => (
+          <Card
+            key={photo.id}
+            className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group"
+            onClick={() => openModal(photo)}
+          >
+            {/* Photo Header */}
+            <div className="flex items-center justify-between p-4 pb-2">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
+                  {photo.uploaderProfileImage ? (
+                    <Image
+                      src={photo.uploaderProfileImage || "/placeholder.svg"}
+                      alt={photo.uploaderName || "User"}
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <User className="h-4 w-4 text-gray-400" />
+                  )}
                 </div>
-                {photo.year && (
-                  <div className="flex items-center space-x-1 text-xs text-gray-500">
-                    <Calendar className="h-3 w-3" />
-                    <span>{photo.year}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Photo */}
-              <div className="relative aspect-square">
-                <Image
-                  src={photo.url || "/placeholder.svg"}
-                  alt={photo.title || "Photo"}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-4 text-white">
-                    <div className="flex items-center space-x-1">
-                      <Heart className={`h-5 w-5 ${stats.hasLiked ? "fill-current text-red-500" : ""}`} />
-                      <span className="font-medium">{stats.likes}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <MessageCircle className="h-5 w-5" />
-                      <span className="font-medium">{stats.comments}</span>
-                    </div>
-                    <Eye className="h-5 w-5" />
-                  </div>
+                <div>
+                  <p className="font-medium text-sm text-gray-800">{photo.uploaderName || "Anonymous"}</p>
+                  {photo.uploaded_at && <p className="text-xs text-gray-500">{formatDate(photo.uploaded_at)}</p>}
                 </div>
               </div>
-
-              <CardContent className="p-4">
-                {/* Action Buttons */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="p-0 h-auto hover:bg-transparent"
-                      onClick={(e) => handleLike(photo, e)}
-                    >
-                      <Heart
-                        className={`h-5 w-5 text-gray-700 hover:text-red-500 ${stats.hasLiked ? "fill-current text-red-500" : ""}`}
-                      />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="p-0 h-auto hover:bg-transparent">
-                      <MessageCircle className="h-5 w-5 text-gray-700" />
-                    </Button>
-                  </div>
-                  {stats.likes > 0 && <p className="text-sm text-gray-600">{stats.likes} likes</p>}
+              {photo.year && (
+                <div className="flex items-center space-x-1 text-xs text-gray-500">
+                  <Calendar className="h-3 w-3" />
+                  <span>{photo.year}</span>
                 </div>
+              )}
+            </div>
 
-                {/* Title */}
-                {photo.title && (
-                  <div className="mb-2">
-                    <p className="text-sm">
-                      <span className="font-medium text-gray-800">{photo.uploaderName || "Anonymous"}</span>{" "}
-                      <span className="text-gray-700">{photo.title}</span>
-                    </p>
+            {/* Photo */}
+            <div className="relative aspect-square">
+              <Image
+                src={photo.url || "/placeholder.svg"}
+                alt={photo.title || "Photo"}
+                fill
+                className="object-cover"
+                unoptimized
+              />
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-4 text-white">
+                  <div className="flex items-center space-x-1">
+                    <Heart className="h-5 w-5" />
+                    <span className="font-medium">{photo.likes || 0}</span>
                   </div>
-                )}
+                  <div className="flex items-center space-x-1">
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="font-medium">{photo.comments?.length || 0}</span>
+                  </div>
+                  <Eye className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
 
-                {/* Tags */}
-                {photo.tags && photo.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {photo.tags.slice(0, 3).map((tag, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        <Tag className="h-2 w-2 mr-1" />
-                        {typeof tag === "string" ? tag : tag.name}
-                      </Badge>
-                    ))}
-                    {photo.tags.length > 3 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{photo.tags.length - 3}
-                      </Badge>
-                    )}
-                  </div>
-                )}
+            <CardContent className="p-4">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="p-0 h-auto hover:bg-transparent"
+                    onClick={(e) => handleLike(photo, e)}
+                  >
+                    <Heart className="h-5 w-5 text-gray-700 hover:text-red-500" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="p-0 h-auto hover:bg-transparent">
+                    <MessageCircle className="h-5 w-5 text-gray-700" />
+                  </Button>
+                </div>
+                {photo.likes && photo.likes > 0 && <p className="text-sm text-gray-600">{photo.likes} likes</p>}
+              </div>
 
-                {/* Comments Preview */}
-                {photo.comments && photo.comments.length > 0 && (
-                  <div className="space-y-2 mb-3">
-                    {photo.comments.slice(0, 2).map((comment) => (
-                      <div key={comment.id} className="text-sm">
-                        <span className="font-medium text-gray-800">{comment.author}</span>{" "}
-                        <span className="text-gray-700">{comment.content}</span>
-                      </div>
-                    ))}
-                    {photo.comments.length > 2 && (
-                      <p className="text-sm text-gray-500">View all {photo.comments.length} comments</p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
+              {/* Title */}
+              {photo.title && (
+                <div className="mb-2">
+                  <p className="text-sm">
+                    <span className="font-medium text-gray-800">{photo.uploaderName || "Anonymous"}</span>{" "}
+                    <span className="text-gray-700">{photo.title}</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Tags */}
+              {photo.tags && photo.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {photo.tags.slice(0, 3).map((tag, index) => (
+                    <Badge key={index} variant="secondary" className="text-xs">
+                      <Tag className="h-2 w-2 mr-1" />
+                      {typeof tag === "string" ? tag : tag.name}
+                    </Badge>
+                  ))}
+                  {photo.tags.length > 3 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{photo.tags.length - 3}
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              {/* Comments Preview */}
+              {photo.comments && photo.comments.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {photo.comments.slice(0, 2).map((comment) => (
+                    <div key={comment.id} className="text-sm">
+                      <span className="font-medium text-gray-800">{comment.author}</span>{" "}
+                      <span className="text-gray-700">{comment.content}</span>
+                    </div>
+                  ))}
+                  {photo.comments.length > 2 && (
+                    <p className="text-sm text-gray-500">View all {photo.comments.length} comments</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Photo Modal */}
