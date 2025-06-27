@@ -3,34 +3,66 @@ import { cookies } from "next/headers"
 import { neon } from "@neondatabase/serverless"
 import bcrypt from "bcryptjs"
 
+// Use the same authentication system as other admin endpoints
 async function checkAdminAuth() {
   try {
     if (!process.env.DATABASE_URL) {
+      console.log("🔍 Admin users API: No database URL")
       return false
     }
 
     const cookieStore = await cookies()
+
+    // Use the same session cookie names as the main auth system
     const sessionId =
       cookieStore.get("session")?.value ||
       cookieStore.get("auth-session")?.value ||
       cookieStore.get("user-session")?.value
 
     if (!sessionId) {
+      console.log("🔍 Admin users API: No session ID found")
       return false
     }
 
+    console.log("🔍 Admin users API: Using session ID:", sessionId.substring(0, 20) + "...")
+
     const sql = neon(process.env.DATABASE_URL)
 
+    // Check if user has admin role using the same query structure as auth/me
     const sessions = await sql`
-      SELECT u.role
+      SELECT u.role, u.name, u.email, s.expires_at
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId} AND s.expires_at > NOW()
+      WHERE s.id = ${sessionId}
     `
 
-    return sessions.length > 0 && sessions[0].role === "Admin"
+    if (sessions.length === 0) {
+      console.log("🔍 Admin users API: No valid session found")
+      return false
+    }
+
+    const session = sessions[0]
+    const now = new Date()
+    const expiresAt = new Date(session.expires_at)
+
+    console.log("🔍 Admin users API: Session details:")
+    console.log("  - User:", session.name)
+    console.log("  - Email:", session.email)
+    console.log("  - Role:", session.role)
+    console.log("  - Expires:", expiresAt.toISOString())
+    console.log("  - Valid:", expiresAt > now)
+
+    if (expiresAt <= now) {
+      console.log("🔍 Admin users API: Session expired")
+      return false
+    }
+
+    const isAdmin = session.role === "Admin"
+    console.log("🔍 Admin users API: Is admin?", isAdmin, "(role:", session.role, ")")
+
+    return isAdmin
   } catch (error) {
-    console.error("Admin users auth check failed:", error)
+    console.error("🔍 Admin users API: Auth check failed:", error)
     return false
   }
 }
@@ -38,6 +70,7 @@ async function checkAdminAuth() {
 export async function GET(request: Request) {
   try {
     if (!(await checkAdminAuth())) {
+      console.log("🔍 Admin users API: Unauthorized access attempt")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

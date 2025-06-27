@@ -3,14 +3,17 @@ import { cookies } from "next/headers"
 import { list } from "@vercel/blob"
 import { neon } from "@neondatabase/serverless"
 
-// Check admin role authentication
+// Check admin role authentication using the same session system as regular auth
 async function checkAdminAuth() {
   try {
     if (!process.env.DATABASE_URL) {
+      console.log("🔍 Admin photos API: No database URL")
       return false
     }
 
     const cookieStore = await cookies()
+
+    // Use the same session cookie names as the main auth system
     const sessionId =
       cookieStore.get("session")?.value ||
       cookieStore.get("auth-session")?.value ||
@@ -21,14 +24,16 @@ async function checkAdminAuth() {
       return false
     }
 
+    console.log("🔍 Admin photos API: Using session ID:", sessionId.substring(0, 20) + "...")
+
     const sql = neon(process.env.DATABASE_URL)
 
-    // Check if user has admin role
+    // Check if user has admin role using the same query structure as auth/me
     const sessions = await sql`
-      SELECT u.role, u.name
+      SELECT u.role, u.name, u.email, s.expires_at
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId} AND s.expires_at > NOW()
+      WHERE s.id = ${sessionId}
     `
 
     if (sessions.length === 0) {
@@ -36,8 +41,24 @@ async function checkAdminAuth() {
       return false
     }
 
-    const isAdmin = sessions[0].role === "Admin"
-    console.log("🔍 Admin photos API: User", sessions[0].name, "role:", sessions[0].role, "isAdmin:", isAdmin)
+    const session = sessions[0]
+    const now = new Date()
+    const expiresAt = new Date(session.expires_at)
+
+    console.log("🔍 Admin photos API: Session details:")
+    console.log("  - User:", session.name)
+    console.log("  - Email:", session.email)
+    console.log("  - Role:", session.role)
+    console.log("  - Expires:", expiresAt.toISOString())
+    console.log("  - Valid:", expiresAt > now)
+
+    if (expiresAt <= now) {
+      console.log("🔍 Admin photos API: Session expired")
+      return false
+    }
+
+    const isAdmin = session.role === "Admin"
+    console.log("🔍 Admin photos API: Is admin?", isAdmin, "(role:", session.role, ")")
 
     return isAdmin
   } catch (error) {
