@@ -12,12 +12,6 @@ export async function GET(request: NextRequest) {
 
     // Get all possible session sources with better debugging
     const cookieStore = request.cookies
-    const allCookies = cookieStore.getAll()
-    console.log("🔍 Auth me: All cookies received:", allCookies.length)
-    allCookies.forEach((cookie, index) => {
-      console.log(`🔍 Auth me: Cookie ${index + 1}: ${cookie.name}=${cookie.value.substring(0, 15)}...`)
-    })
-
     const sessionFromCookie = cookieStore.get("session")?.value
     const sessionFromAuthCookie = cookieStore.get("auth-session")?.value
     const sessionFromUserCookie = cookieStore.get("user-session")?.value
@@ -40,13 +34,20 @@ export async function GET(request: NextRequest) {
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Get user from session including role
-    const sessions = await sql`
-      SELECT u.id, u.name, u.email, u.profile_image_url, u.role, s.expires_at, s.id as session_id
-      FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.id = ${sessionId}
-    `
+    // Get user from session including role with error handling
+    let sessions
+    try {
+      sessions = await sql`
+        SELECT u.id, u.name, u.email, u.profile_image_url, u.role, s.expires_at, s.id as session_id
+        FROM user_sessions s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.id = ${sessionId}
+        LIMIT 1
+      `
+    } catch (dbError) {
+      console.error("🔍 Auth me: Database query failed:", dbError)
+      return NextResponse.json({ user: null })
+    }
 
     console.log("🔍 Auth me: Database query returned:", sessions.length, "sessions")
 
@@ -68,7 +69,11 @@ export async function GET(request: NextRequest) {
 
     if (expiresAt <= now) {
       console.log("🔍 Auth me: Session expired, cleaning up")
-      await sql`DELETE FROM user_sessions WHERE id = ${sessionId}`
+      try {
+        await sql`DELETE FROM user_sessions WHERE id = ${sessionId}`
+      } catch (cleanupError) {
+        console.error("🔍 Auth me: Failed to cleanup expired session:", cleanupError)
+      }
       return NextResponse.json({ user: null })
     }
 
@@ -78,12 +83,16 @@ export async function GET(request: NextRequest) {
 
     if (timeUntilExpiry < oneDayInMs) {
       console.log("🔍 Auth me: Extending session expiry")
-      const newExpiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-      await sql`
-        UPDATE user_sessions 
-        SET expires_at = ${newExpiryDate.toISOString()}
-        WHERE id = ${sessionId}
-      `
+      try {
+        const newExpiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+        await sql`
+          UPDATE user_sessions 
+          SET expires_at = ${newExpiryDate.toISOString()}
+          WHERE id = ${sessionId}
+        `
+      } catch (extendError) {
+        console.error("🔍 Auth me: Failed to extend session:", extendError)
+      }
     }
 
     console.log("🔍 Auth me: Valid session found - returning user data")
@@ -96,13 +105,13 @@ export async function GET(request: NextRequest) {
         email: session.email,
         role: session.role || "Member",
         profileImage: session.profile_image_url,
-        sessionToken: sessionId, // Include session token in response
+        sessionToken: sessionId,
       },
     }
 
     const response = NextResponse.json(userData)
 
-    // Force set cookies with multiple strategies and longer expiry
+    // Set cookies with proper options
     const cookieOptions = {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
@@ -120,6 +129,6 @@ export async function GET(request: NextRequest) {
     return response
   } catch (error) {
     console.error("🔍 Auth me: Error during auth check:", error)
-    return NextResponse.json({ user: null })
+    return NextResponse.json({ user: null }, { status: 200 }) // Always return 200 to avoid JSON parsing issues
   }
 }
