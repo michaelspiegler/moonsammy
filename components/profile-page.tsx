@@ -3,55 +3,128 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Upload, Save, User, Camera } from "lucide-react"
+import { Save, ArrowLeft, Camera, User, RefreshCw, Upload, Heart, MessageCircle, Calendar, Palette } from "lucide-react"
+import { ThemeSelector } from "./theme-selector"
 
-interface ProfilePageProps {
-  user: any
-  onBack: () => void
+interface UserType {
+  id: string
+  name: string
+  email: string
+  profileImage?: string
 }
 
-export function ProfilePage({ user, onBack }: ProfilePageProps) {
-  const [name, setName] = useState(user?.name || "")
+interface UserUpload {
+  id: string
+  url: string
+  filename: string
+  title: string
+  uploadedAt: string
+  commentCount: number
+  likeCount: number
+}
+
+export function ProfilePage() {
+  const [user, setUser] = useState<UserType | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [name, setName] = useState("")
   const [profileImage, setProfileImage] = useState<File | null>(null)
-  const [profileImageUrl, setProfileImageUrl] = useState(user?.profileImage || "")
-  const [previewUrl, setPreviewUrl] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
-  const [uploads, setUploads] = useState([])
-  const [uploadsLoading, setUploadsLoading] = useState(true)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const [syncing, setSyncing] = useState(false)
+  const [uploads, setUploads] = useState<UserUpload[]>([])
+  const [uploadsLoading, setUploadsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<"profile" | "uploads" | "themes">("profile")
 
   useEffect(() => {
-    fetchUserUploads()
+    console.log("🔍 Profile page mounted, fetching profile...")
+    fetchProfile()
   }, [])
 
-  const fetchUserUploads = async () => {
-    try {
-      const sessionToken = localStorage.getItem("sessionToken") || getCookie("session") || getCookie("auth-session")
+  useEffect(() => {
+    if (activeTab === "uploads" && user) {
+      fetchUploads()
+    }
+  }, [activeTab, user])
 
-      if (!sessionToken) {
-        setUploadsLoading(false)
-        return
+  const fetchProfile = async () => {
+    try {
+      console.log("🔍 Calling /api/profile...")
+
+      // Get session token from localStorage as backup
+      const sessionToken = localStorage.getItem("sessionToken")
+      console.log("🔍 Session token from localStorage:", sessionToken ? "exists" : "missing")
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      }
+
+      // Add session token to headers if available
+      if (sessionToken) {
+        headers["x-session-token"] = sessionToken
+      }
+
+      const response = await fetch("/api/profile", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        headers,
+      })
+
+      console.log("🔍 Profile API response status:", response.status)
+      console.log("🔍 Profile API response headers:", Object.fromEntries(response.headers.entries()))
+
+      const data = await response.json()
+      console.log("🔍 Profile API response data:", data)
+
+      if (response.ok && data.user) {
+        console.log("🔍 Profile page: loaded user data successfully:", data.user)
+        setUser(data.user)
+        setName(data.user.name)
+        setPreviewUrl(data.user.profileImage || null)
+        setError(null)
+      } else {
+        console.log("🔍 Profile page: no user data or error:", data)
+        setError(data.error || "Failed to load profile")
+      }
+    } catch (error) {
+      console.error("🔍 Error fetching profile:", error)
+      setError("Failed to load profile")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchUploads = async () => {
+    setUploadsLoading(true)
+    try {
+      const sessionToken = localStorage.getItem("sessionToken")
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      }
+
+      if (sessionToken) {
+        headers["x-session-token"] = sessionToken
       }
 
       const response = await fetch("/api/profile/uploads", {
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-          "x-session-token": sessionToken,
-        },
+        method: "GET",
         credentials: "include",
+        headers,
       })
 
+      const data = await response.json()
+
       if (response.ok) {
-        const data = await response.json()
         setUploads(data.uploads || [])
       } else {
-        console.error("Failed to fetch uploads")
+        console.error("Failed to fetch uploads:", data.error)
       }
     } catch (error) {
       console.error("Error fetching uploads:", error)
@@ -60,175 +133,331 @@ export function ProfilePage({ user, onBack }: ProfilePageProps) {
     }
   }
 
-  const getCookie = (name: string) => {
-    if (typeof document === "undefined") return null
-    const value = `; ${document.cookie}`
-    const parts = value.split(`; ${name}=`)
-    if (parts.length === 2) return parts.pop()?.split(";").shift()
-    return null
-  }
-
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       setProfileImage(file)
-      const url = URL.createObjectURL(file)
-      setPreviewUrl(url)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result as string)
+      }
+      reader.readAsDataURL(file)
     }
   }
 
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setName(e.target.value)
+  }
+
   const handleSave = async () => {
-    setLoading(true)
-    setError("")
-    setSuccess("")
+    if (!name.trim() || name.trim().length < 2) {
+      alert("Name must be at least 2 characters")
+      return
+    }
 
+    setSaving(true)
     try {
-      const sessionToken = localStorage.getItem("sessionToken") || getCookie("session") || getCookie("auth-session")
-
-      if (!sessionToken) {
-        setError("Please log in again")
-        setLoading(false)
-        return
-      }
-
       const formData = new FormData()
-      formData.append("name", name)
+      formData.append("name", name.trim())
       if (profileImage) {
         formData.append("profileImage", profileImage)
       }
 
+      // Get session token for headers
+      const sessionToken = localStorage.getItem("sessionToken")
+      const headers: HeadersInit = {}
+      if (sessionToken) {
+        headers["x-session-token"] = sessionToken
+      }
+
       const response = await fetch("/api/profile", {
         method: "PUT",
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-          "x-session-token": sessionToken,
-        },
         credentials: "include",
+        headers,
         body: formData,
       })
 
       const data = await response.json()
 
-      if (response.ok) {
-        setSuccess("Profile updated successfully!")
-        if (data.user?.profileImage) {
-          setProfileImageUrl(data.user.profileImage)
-        }
-        // Clear the preview
-        setPreviewUrl("")
+      if (response.ok && data.success) {
+        setUser(data.user)
         setProfileImage(null)
+
+        // Enhanced success message
+        if (profileImage) {
+          alert("Profile updated successfully! Your new profile picture will appear on all your uploaded photos.")
+        } else {
+          alert("Profile updated successfully!")
+        }
       } else {
-        setError(data.error || "Failed to update profile")
+        alert(data.error || "Failed to update profile")
       }
     } catch (error) {
-      console.error("Profile update error:", error)
-      setError("Failed to update profile")
+      console.error("Error updating profile:", error)
+      alert("Failed to update profile")
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
+      localStorage.removeItem("sessionToken")
+      window.location.href = "/"
+    } catch (error) {
+      console.error("Logout error:", error)
+      localStorage.removeItem("sessionToken")
+      window.location.href = "/"
+    }
+  }
+
+  const handleBackToGallery = () => {
+    console.log("🔍 Navigating back to gallery...")
+    // Use window.location instead of router to preserve session
+    window.location.href = "/"
+  }
+
+  const handleSyncUploads = async () => {
+    if (!user?.profileImage) {
+      alert("You need a profile picture to sync with your uploads")
+      return
+    }
+
+    if (!confirm("This will update all your uploaded photos to show your current profile picture. Continue?")) {
+      return
+    }
+
+    setSyncing(true)
+    try {
+      // Get session token for headers
+      const sessionToken = localStorage.getItem("sessionToken")
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      }
+      if (sessionToken) {
+        headers["x-session-token"] = sessionToken
+      }
+
+      const response = await fetch("/api/profile/sync-uploads", {
+        method: "POST",
+        credentials: "include",
+        headers,
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        alert(data.message)
+      } else {
+        alert(data.error || "Failed to sync uploads")
+      }
+    } catch (error) {
+      console.error("Error syncing uploads:", error)
+      alert("Failed to sync uploads")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
   return (
-    <div className="main-container">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-6">
-          <Button onClick={onBack} variant="outline">
-            ← Back to Gallery
+    <div className="min-h-screen theme-bg">
+      <div className="container mx-auto px-6 py-12 max-w-4xl">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <Button onClick={handleBackToGallery} variant="ghost" className="font-light">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Gallery
+          </Button>
+          <Button onClick={handleLogout} variant="outline" className="font-light">
+            Logout
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Profile Settings */}
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`px-4 py-2 rounded-md font-light transition-colors ${
+              activeTab === "profile" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <User className="h-4 w-4 inline mr-2" />
+            Profile/Settings
+          </button>
+          <button
+            onClick={() => setActiveTab("uploads")}
+            className={`px-4 py-2 rounded-md font-light transition-colors ${
+              activeTab === "uploads" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <Upload className="h-4 w-4 inline mr-2" />
+            My Uploads ({uploads.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("themes")}
+            className={`px-4 py-2 rounded-md font-light transition-colors ${
+              activeTab === "themes" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <Palette className="h-4 w-4 inline mr-2" />
+            Themes
+          </button>
+        </div>
+
+        {activeTab === "profile" && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center space-x-2 text-gray-700 font-light">
                 <User className="h-5 w-5" />
-                Profile Settings
+                <span>My Profile</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Profile Image */}
               <div className="text-center">
                 <div className="relative inline-block">
-                  <Avatar className="h-24 w-24 mx-auto">
-                    <AvatarImage src={previewUrl || profileImageUrl} alt={name || "Profile"} className="object-cover" />
-                    <AvatarFallback className="text-lg">{name ? name.charAt(0).toUpperCase() : "U"}</AvatarFallback>
-                  </Avatar>
-                  <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/90 transition-colors">
+                  <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg">
+                    {previewUrl ? (
+                      <Image
+                        src={previewUrl || "/placeholder.svg"}
+                        alt="Profile"
+                        width={128}
+                        height={128}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <User className="h-12 w-12 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  <label className="absolute bottom-0 right-0 bg-blue-500 hover:bg-blue-600 text-white rounded-full p-2 cursor-pointer shadow-lg transition-colors">
                     <Camera className="h-4 w-4" />
                     <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                   </label>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-sm text-gray-500 mt-2 font-light">
                   Click the camera icon to change your profile picture
+                </p>
+                <p className="text-xs text-blue-600 mt-1 font-light">
+                  Your profile picture will appear on photos you upload
                 </p>
               </div>
 
-              {/* Name */}
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
-              </div>
+              {/* Profile Info */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    className="font-light"
+                  />
+                </div>
 
-              {/* Email (read-only) */}
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" value={user?.email || ""} disabled className="bg-muted" />
-                <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <Input value={user?.email || ""} disabled className="font-light bg-gray-50" />
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                </div>
               </div>
-
-              {/* Error/Success Messages */}
-              {error && <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm">{error}</div>}
-              {success && <div className="bg-green-50 text-green-700 p-3 rounded-md text-sm">{success}</div>}
 
               {/* Save Button */}
-              <Button onClick={handleSave} disabled={loading} className="w-full">
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
+              <div className="flex justify-between items-center">
+                <Button
+                  onClick={handleSyncUploads}
+                  disabled={syncing || !user?.profileImage}
+                  variant="outline"
+                  className="font-light"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+                  {syncing ? "Syncing..." : "Sync Profile to Uploads"}
+                </Button>
+
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || !name.trim() || name.trim().length < 2}
+                  className="bg-gray-800 hover:bg-gray-700 text-white font-light px-6"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
+        )}
 
-          {/* Upload History */}
+        {activeTab === "uploads" && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center space-x-2 text-gray-700 font-light">
                 <Upload className="h-5 w-5" />
-                Your Uploads
+                <span>My Uploads</span>
+                <span className="text-sm font-normal text-gray-500">({uploads.length} photos)</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               {uploadsLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-                  <p className="text-muted-foreground">Loading uploads...</p>
+                <div className="text-center py-12">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-gray-600"></div>
+                  <p className="mt-4 text-gray-500 font-light">Loading your uploads...</p>
                 </div>
               ) : uploads.length === 0 ? (
-                <div className="text-center py-8">
-                  <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No uploads yet</p>
-                  <p className="text-sm text-muted-foreground mt-2">Photos you upload will appear here</p>
+                <div className="text-center py-12">
+                  <Upload className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 font-light">You haven't uploaded any photos yet</p>
+                  <Button onClick={handleBackToGallery} variant="outline" className="mt-4 font-light">
+                    Upload Your First Photo
+                  </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {uploads.map((upload: any) => (
-                    <div key={upload.id} className="relative group">
-                      <img
-                        src={upload.url || "/placeholder.svg"}
-                        alt={upload.title || "Upload"}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                        <p className="text-white text-xs text-center px-2">{upload.title || "No caption"}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {uploads.map((upload) => (
+                    <div key={upload.id} className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                      <div className="aspect-square relative">
+                        <Image
+                          src={upload.url || "/placeholder.svg"}
+                          alt={upload.title || upload.filename}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      <div className="p-4">
+                        {upload.title && (
+                          <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">{upload.title}</h3>
+                        )}
+                        <p className="text-sm text-gray-600 mb-3 line-clamp-1">{upload.filename}</p>
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <div className="flex items-center space-x-3">
+                            <span className="flex items-center">
+                              <Heart className="h-3 w-3 mr-1" />
+                              {upload.likeCount}
+                            </span>
+                            <span className="flex items-center">
+                              <MessageCircle className="h-3 w-3 mr-1" />
+                              {upload.commentCount}
+                            </span>
+                          </div>
+                          <span className="flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {formatDate(upload.uploadedAt)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -236,7 +465,21 @@ export function ProfilePage({ user, onBack }: ProfilePageProps) {
               )}
             </CardContent>
           </Card>
-        </div>
+        )}
+
+        {activeTab === "themes" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-gray-700 font-light">
+                <Palette className="h-5 w-5" />
+                <span>App Themes</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ThemeSelector />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

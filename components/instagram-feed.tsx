@@ -394,15 +394,19 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               {localUser.profileImage ? (
-                <Image
-                  src={localUser.profileImage || "/placeholder.svg"}
-                  alt="Profile"
-                  width={24}
-                  height={24}
-                  className="rounded-full object-cover"
-                />
+                <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
+                  <Image
+                    src={localUser.profileImage || "/placeholder.svg"}
+                    alt="Profile"
+                    width={24}
+                    height={24}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               ) : (
-                <User className="h-4 w-4 text-green-600" />
+                <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
+                  <User className="h-3 w-3 text-gray-600" />
+                </div>
               )}
               <span className="text-green-700 font-medium text-sm">Signed in as {localUser.name}</span>
             </div>
@@ -426,18 +430,18 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
           <div key={photo.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
             <div className="p-3 border-b border-gray-100">
               <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden">
+                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
                   {photo.uploaderProfileImage ? (
                     <Image
                       src={photo.uploaderProfileImage || "/placeholder.svg"}
                       alt={photo.uploaderName || "User"}
-                      width={24}
-                      height={24}
-                      className="rounded-full object-cover"
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
-                      <User className="h-3 w-3 text-gray-600" />
+                    <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center">
+                      <User className="h-4 w-4 text-gray-600" />
                     </div>
                   )}
                 </div>
@@ -566,17 +570,19 @@ export function InstagramFeed({ photos, onPhotoUpdate, user, onUserChange }: Ins
               {showCommentInput[photo.id] && localUser && (
                 <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
                   <div className="flex items-center space-x-2 mb-2">
-                    <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
                       {localUser.profileImage ? (
                         <Image
                           src={localUser.profileImage || "/placeholder.svg"}
                           alt="Profile"
-                          width={20}
-                          height={20}
-                          className="rounded-full object-cover"
+                          width={24}
+                          height={24}
+                          className="w-full h-full object-cover"
                         />
                       ) : (
-                        <User className="h-2.5 w-2.5 text-gray-600" />
+                        <div className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center">
+                          <User className="h-3 w-3 text-gray-600" />
+                        </div>
                       )}
                     </div>
                     <span className="text-sm font-medium text-gray-700">{localUser.name}</span>

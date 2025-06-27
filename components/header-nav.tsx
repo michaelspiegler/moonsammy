@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AuthModal } from "./auth-modal"
@@ -78,7 +79,7 @@ export function HeaderNav({ user, onAuthChange, onSuccess, showButtonOnly = fals
   // If showButtonOnly is true, render just the auth button
   if (showButtonOnly) {
     return (
-      <div className="header-nav-container">
+      <>
         <button
           onClick={() => setShowAuthModal(true)}
           className="px-6 py-2 bg-[#D4AF37] text-[#222222] font-medium rounded-md hover:bg-[#B8941F] transition-colors"
@@ -89,12 +90,12 @@ export function HeaderNav({ user, onAuthChange, onSuccess, showButtonOnly = fals
         {showAuthModal && (
           <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={handleAuthSuccess} />
         )}
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="flex items-center gap-4 header-nav-container">
+    <div className="flex items-center gap-4">
       {/* FAQ and Sign in required links */}
       <div className="flex items-center gap-4 text-sm">
         <a href="/faq" className="text-[#D4AF37] hover:text-[#B8941F] transition-colors">
@@ -119,7 +120,7 @@ export function HeaderNav({ user, onAuthChange, onSuccess, showButtonOnly = fals
           </button>
 
           {showDropdown && (
-            <div className="header-dropdown right-0 mt-2 w-48 bg-[#222222] border border-[#333333] rounded-md shadow-lg">
+            <div className="absolute right-0 mt-2 w-48 bg-[#222222] border border-[#333333] rounded-md shadow-lg z-[999999]">
               <div className="py-1">
                 <div className="px-4 py-2 text-xs text-gray-400 border-b border-[#333333]">{user.role || "Member"}</div>
 

@@ -27,90 +27,69 @@ export function PhotoFilter({ onFilter, activeTags, activeYears }: PhotoFilterPr
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([fetchTags(), fetchYears()]).finally(() => setLoading(false))
+    Promise.all([fetchTags(), fetchYears()])
   }, [])
 
   const fetchTags = async () => {
     try {
       const response = await fetch("/api/tags")
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
       const data = await response.json()
-      if (data.tags && Array.isArray(data.tags)) {
+      if (data.tags) {
         setTags(data.tags)
-      } else {
-        setTags([])
       }
     } catch (error) {
       console.error("Error fetching tags:", error)
-      setTags([])
     }
   }
 
   const fetchYears = async () => {
     try {
+      setLoading(true)
       const response = await fetch("/api/years")
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
       const data = await response.json()
-      if (data.years && Array.isArray(data.years)) {
+      if (data.years) {
         setYears(data.years)
-      } else {
-        setYears([])
       }
     } catch (error) {
       console.error("Error fetching years:", error)
-      setYears([])
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleTagClick = (tagName: string) => {
-    if (!activeTags || !Array.isArray(activeTags)) return
-
     if (activeTags.includes(tagName)) {
       const newTags = activeTags.filter((tag) => tag !== tagName)
-      onFilter(newTags, activeYears || [])
+      onFilter(newTags, activeYears)
     } else {
       const newTags = [...activeTags, tagName]
-      onFilter(newTags, activeYears || [])
+      onFilter(newTags, activeYears)
     }
   }
 
   const handleYearClick = (year: number) => {
-    if (!activeYears || !Array.isArray(activeYears)) return
-
     if (activeYears.includes(year)) {
       const newYears = activeYears.filter((y) => y !== year)
-      onFilter(activeTags || [], newYears)
+      onFilter(activeTags, newYears)
     } else {
       const newYears = [...activeYears, year]
-      onFilter(activeTags || [], newYears)
+      onFilter(activeTags, newYears)
     }
   }
 
   const handleRemoveTag = (tagName: string) => {
-    if (!activeTags || !Array.isArray(activeTags)) return
     const newTags = activeTags.filter((tag) => tag !== tagName)
-    onFilter(newTags, activeYears || [])
+    onFilter(newTags, activeYears)
   }
 
   const handleRemoveYear = (year: number) => {
-    if (!activeYears || !Array.isArray(activeYears)) return
     const newYears = activeYears.filter((y) => y !== year)
-    onFilter(activeTags || [], newYears)
+    onFilter(activeTags, newYears)
   }
 
   const handleClearAll = () => {
     onFilter([], [])
   }
-
-  // Safe array checks
-  const safeActiveTags = activeTags || []
-  const safeActiveYears = activeYears || []
-  const safeTags = tags || []
-  const safeYears = years || []
 
   if (loading) {
     return (
@@ -123,11 +102,11 @@ export function PhotoFilter({ onFilter, activeTags, activeYears }: PhotoFilterPr
     )
   }
 
-  if (safeTags.length === 0 && safeYears.length === 0) {
+  if (tags.length === 0 && years.length === 0) {
     return null
   }
 
-  const hasActiveFilters = safeActiveTags.length > 0 || safeActiveYears.length > 0
+  const hasActiveFilters = activeTags.length > 0 || activeYears.length > 0
 
   return (
     <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -151,7 +130,7 @@ export function PhotoFilter({ onFilter, activeTags, activeYears }: PhotoFilterPr
             <span className="text-blue-700 font-medium text-sm">Active filters:</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {safeActiveTags.map((tagName) => (
+            {activeTags.map((tagName) => (
               <div
                 key={`tag-${tagName}`}
                 className="inline-flex items-center bg-blue-600 text-white text-sm px-3 py-1 rounded-full"
@@ -166,7 +145,7 @@ export function PhotoFilter({ onFilter, activeTags, activeYears }: PhotoFilterPr
                 </button>
               </div>
             ))}
-            {safeActiveYears.map((year) => (
+            {activeYears.map((year) => (
               <div
                 key={`year-${year}`}
                 className="inline-flex items-center bg-green-600 text-white text-sm px-3 py-1 rounded-full"
@@ -186,15 +165,15 @@ export function PhotoFilter({ onFilter, activeTags, activeYears }: PhotoFilterPr
       )}
 
       {/* Tags Section */}
-      {safeTags.length > 0 && (
+      {tags.length > 0 && (
         <div className="mb-4">
           <div className="flex items-center space-x-2 mb-2">
             <Tag className="h-4 w-4 text-gray-600" />
             <span className="text-gray-700 font-medium text-sm">Tags:</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {safeTags.map((tag) => {
-              const isSelected = safeActiveTags.includes(tag.name)
+            {tags.map((tag) => {
+              const isSelected = activeTags.includes(tag.name)
               return (
                 <Button
                   key={tag.id}
@@ -217,15 +196,15 @@ export function PhotoFilter({ onFilter, activeTags, activeYears }: PhotoFilterPr
       )}
 
       {/* Years Section */}
-      {safeYears.length > 0 && (
+      {years.length > 0 && (
         <div>
           <div className="flex items-center space-x-2 mb-2">
             <Calendar className="h-4 w-4 text-gray-600" />
             <span className="text-gray-700 font-medium text-sm">Years:</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {safeYears.map((yearData) => {
-              const isSelected = safeActiveYears.includes(yearData.year)
+            {years.map((yearData) => {
+              const isSelected = activeYears.includes(yearData.year)
               return (
                 <Button
                   key={yearData.year}
@@ -250,11 +229,11 @@ export function PhotoFilter({ onFilter, activeTags, activeYears }: PhotoFilterPr
       {hasActiveFilters && (
         <div className="mt-3 text-sm text-gray-600">
           Showing photos{" "}
-          {safeActiveTags.length > 0 && safeActiveYears.length > 0
-            ? `tagged with any of: ${safeActiveTags.map((tag) => `"${tag}"`).join(", ")} and from years: ${safeActiveYears.join(", ")}`
-            : safeActiveTags.length > 0
-              ? `tagged with any of: ${safeActiveTags.map((tag) => `"${tag}"`).join(", ")}`
-              : `from years: ${safeActiveYears.join(", ")}`}
+          {activeTags.length > 0 && activeYears.length > 0
+            ? `tagged with any of: ${activeTags.map((tag) => `"${tag}"`).join(", ")} and from years: ${activeYears.join(", ")}`
+            : activeTags.length > 0
+              ? `tagged with any of: ${activeTags.map((tag) => `"${tag}"`).join(", ")}`
+              : `from years: ${activeYears.join(", ")}`}
         </div>
       )}
     </div>

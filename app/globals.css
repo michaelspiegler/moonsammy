@@ -6,10 +6,6 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-.font-serif {
-  font-family: Georgia, "Times New Roman", Times, serif;
-}
-
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -356,23 +352,6 @@ body {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
   position: relative !important;
   z-index: 2147483647 !important;
-}
-
-/* Fixed Header Z-Index Management */
-header {
-  z-index: 999998 !important;
-}
-
-/* Header Navigation Container - Higher than header but lower than modal */
-.header-nav-container {
-  position: relative !important;
-  z-index: 999999 !important;
-}
-
-/* Dropdown Menu - Should be above header but below modal */
-.header-dropdown {
-  position: absolute !important;
-  z-index: 999999 !important;
 }
 
 /* Other theme styles */

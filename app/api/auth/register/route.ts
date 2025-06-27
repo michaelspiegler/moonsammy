@@ -1,105 +1,86 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import bcrypt from "bcryptjs"
-import { v4 as uuidv4 } from "uuid"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json()
-
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 })
-    }
-
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
-    }
-
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 })
     }
 
+    const { name, email, password } = await request.json()
+
+    // Validate input
+    if (!name?.trim() || name.trim().length < 2) {
+      return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 })
+    }
+
+    if (!email?.trim() || !email.includes("@")) {
+      return NextResponse.json({ error: "Valid email is required" }, { status: 400 })
+    }
+
+    if (!password || password.length < 6) {
+      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
+    }
+
     const sql = neon(process.env.DATABASE_URL)
 
-    // Check if user already exists
-    const existingUsers = await sql`
-      SELECT id FROM users WHERE email = ${email.toLowerCase()}
+    // Check if email already exists
+    const existingUser = await sql`
+      SELECT id FROM users WHERE email = ${email.toLowerCase().trim()}
     `
 
-    if (existingUsers.length > 0) {
-      return NextResponse.json({ error: "User already exists with this email" }, { status: 409 })
+    if (existingUser.length > 0) {
+      return NextResponse.json({ error: "Email already registered" }, { status: 400 })
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12)
+    const passwordHash = await bcrypt.hash(password, 12)
 
-    // Create user
-    const userId = uuidv4()
+    // Create user with Member role by default
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
     await sql`
-      INSERT INTO users (id, name, email, password_hash, role, created_at)
-      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase()}, ${hashedPassword}, 'user', NOW())
+      INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
+      VALUES (${userId}, ${name.trim()}, ${email.toLowerCase().trim()}, ${passwordHash}, 'Member', NOW(), NOW())
     `
 
     // Create session
-    const sessionId = uuidv4()
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
     await sql`
-      INSERT INTO user_sessions (id, user_id, expires_at)
-      VALUES (${sessionId}, ${userId}, ${expiresAt})
+      INSERT INTO user_sessions (id, user_id, expires_at, created_at)
+      VALUES (${sessionId}, ${userId}, ${expiryDate.toISOString()}, NOW())
     `
-
-    // Log activity
-    try {
-      await sql`
-        INSERT INTO activity_logs (id, action, user_id, user_name, user_email, details, created_at)
-        VALUES (
-          ${uuidv4()},
-          'register',
-          ${userId},
-          ${name.trim()},
-          ${email.toLowerCase()},
-          ${JSON.stringify({ ip: request.headers.get("x-forwarded-for") || "unknown" })},
-          NOW()
-        )
-      `
-    } catch (logError) {
-      console.error("Failed to log activity:", logError)
-      // Don't fail the registration if logging fails
-    }
 
     const response = NextResponse.json({
       success: true,
       user: {
         id: userId,
         name: name.trim(),
-        email: email.toLowerCase(),
-        role: "user",
+        email: email.toLowerCase().trim(),
+        role: "Member",
         profileImage: null,
-        sessionToken: sessionId,
       },
     })
 
-    // Set multiple cookies for compatibility
-    response.cookies.set("session", sessionId, {
+    // Set session cookies
+    const cookieOptions = {
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60,
+      secure: false,
+      sameSite: "lax" as const,
       path: "/",
-    })
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    }
 
-    response.cookies.set("auth-session", sessionId, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60,
-      path: "/",
-    })
+    response.cookies.set("session", sessionId, cookieOptions)
+    response.cookies.set("auth-session", sessionId, cookieOptions)
+    response.cookies.set("user-session", sessionId, cookieOptions)
 
     return response
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json({ error: "Registration failed" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to create account" }, { status: 500 })
   }
 }
