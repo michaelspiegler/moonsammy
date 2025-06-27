@@ -17,19 +17,8 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true })
 
     // Clear cookies
-    response.cookies.set("session", "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-    })
-
-    response.cookies.set("auth-session", "", {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-    })
+    response.cookies.delete("session")
+    response.cookies.delete("auth-session")
 
     return response
   } catch (error) {

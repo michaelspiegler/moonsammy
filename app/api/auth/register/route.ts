@@ -19,21 +19,18 @@ export async function POST(request: NextRequest) {
     `
 
     if (existingUsers.length > 0) {
-      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
+      return NextResponse.json({ error: "User already exists" }, { status: 400 })
     }
 
     // Hash password
-    const saltRounds = 12
-    const hashedPassword = await bcrypt.hash(password, saltRounds)
+    const passwordHash = await bcrypt.hash(password, 12)
 
     // Create user
-    const newUsers = await sql`
-      INSERT INTO users (name, email, password_hash, role, created_at)
-      VALUES (${name}, ${email}, ${hashedPassword}, 'user', NOW())
-      RETURNING id, name, email, role, profile_image_url
+    const userId = uuidv4()
+    await sql`
+      INSERT INTO users (id, name, email, password_hash, role)
+      VALUES (${userId}, ${name}, ${email}, ${passwordHash}, 'user')
     `
-
-    const newUser = newUsers[0]
 
     // Create session
     const sessionId = uuidv4()
@@ -41,24 +38,30 @@ export async function POST(request: NextRequest) {
 
     await sql`
       INSERT INTO user_sessions (id, user_id, expires_at)
-      VALUES (${sessionId}, ${newUser.id}, ${expiresAt})
+      VALUES (${sessionId}, ${userId}, ${expiresAt})
     `
 
-    // Log activity
+    // Log activity with proper JSON
+    const logDetails = {
+      email: email,
+      name: name,
+      timestamp: new Date().toISOString(),
+      ip: request.headers.get("x-forwarded-for") || "unknown",
+    }
+
     await sql`
       INSERT INTO activity_logs (user_id, action, details)
-      VALUES (${newUser.id}, 'register', ${"User registered"})
+      VALUES (${userId}, 'register', ${JSON.stringify(logDetails)})
     `
 
     const response = NextResponse.json({
       success: true,
       user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        profileImageUrl: newUser.profile_image_url,
-        sessionToken: sessionId,
+        id: userId,
+        name: name,
+        email: email,
+        role: "user",
+        profileImageUrl: null,
       },
       sessionToken: sessionId,
     })

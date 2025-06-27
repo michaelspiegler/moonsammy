@@ -41,10 +41,16 @@ export async function POST(request: NextRequest) {
       VALUES (${sessionId}, ${user.id}, ${expiresAt})
     `
 
-    // Log activity
+    // Log activity with proper JSON
+    const logDetails = {
+      email: user.email,
+      timestamp: new Date().toISOString(),
+      ip: request.headers.get("x-forwarded-for") || "unknown",
+    }
+
     await sql`
       INSERT INTO activity_logs (user_id, action, details)
-      VALUES (${user.id}, 'login', ${"User logged in"})
+      VALUES (${user.id}, 'login', ${JSON.stringify(logDetails)})
     `
 
     const response = NextResponse.json({
@@ -55,7 +61,6 @@ export async function POST(request: NextRequest) {
         email: user.email,
         role: user.role,
         profileImageUrl: user.profile_image_url,
-        sessionToken: sessionId,
       },
       sessionToken: sessionId,
     })

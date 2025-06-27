@@ -1,12 +1,11 @@
 "use client"
 import { useState } from "react"
 import type React from "react"
-import type { User } from "@/lib/types"
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: (user: User) => void
+  onSuccess: (user: any) => void
 }
 
 export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
@@ -20,36 +19,41 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
+
     if (mode === "register" && password !== confirmPassword) {
-      setError("Passwords do not match.")
+      setError("Passwords don't match")
       return
     }
+
     setLoading(true)
     setError("")
 
-    const url = mode === "login" ? "/api/auth/login" : "/api/auth/register"
-    const body = mode === "login" ? { email, password } : { name, email, password }
-
     try {
+      const url = mode === "login" ? "/api/auth/login" : "/api/auth/register"
+      const body = mode === "login" ? { email, password } : { name, email, password }
+
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(body),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || "An unknown error occurred.")
+        throw new Error(data.error || "Authentication failed")
       }
 
       if (data.user) {
         onSuccess(data.user)
+        onClose()
       } else {
-        throw new Error("Login successful, but no user data was returned.")
+        throw new Error("No user data returned")
       }
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || "Authentication failed")
     } finally {
       setLoading(false)
     }
@@ -60,8 +64,8 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
   }
 
   return (
-    <div className="auth-modal-overlay" onClick={onClose}>
-      <div className="auth-modal-container" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-[#222222] border border-[#444444] rounded-lg p-6 w-full max-w-md mx-4">
         <div className="flex mb-6 bg-[#333333] rounded-lg p-1">
           <button
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
@@ -96,6 +100,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
               required
             />
           )}
+
           <input
             type="email"
             placeholder="Email Address"
@@ -104,6 +109,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+
           <input
             type="password"
             placeholder="Password"
@@ -112,6 +118,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
           {mode === "register" && (
             <input
               type="password"
@@ -122,12 +129,29 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
               required
             />
           )}
+
           {error && <p className="text-red-400 text-sm text-center font-light">{error}</p>}
+
           <div className="mt-6 space-y-3">
-            <button type="submit" className="w-full btn" disabled={loading}>
-              {loading ? "Processing..." : mode === "login" ? "Sign In" : "Create Account"}
+            <button
+              type="submit"
+              className="w-full py-3 px-4 bg-[#D4AF37] text-[#222222] font-medium rounded-md hover:bg-[#B8941F] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#222222] transition-colors disabled:opacity-50"
+              disabled={loading}
+            >
+              {loading
+                ? mode === "login"
+                  ? "Signing In..."
+                  : "Creating Account..."
+                : mode === "login"
+                  ? "Sign In"
+                  : "Create Account"}
             </button>
-            <button type="button" className="w-full btn" onClick={onClose}>
+
+            <button
+              type="button"
+              className="w-full py-3 px-4 bg-transparent border border-[#444444] text-[#D4AF37] font-medium rounded-md hover:bg-[#333333] focus:outline-none focus:ring-2 focus:ring-[#D4AF37] focus:ring-offset-2 focus:ring-offset-[#222222] transition-colors"
+              onClick={onClose}
+            >
               Cancel
             </button>
           </div>
