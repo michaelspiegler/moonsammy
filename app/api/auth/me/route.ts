@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No session token" }, { status: 401 })
     }
 
-    // Find session and user
+    // Find session
     const sessions = await sql`
       SELECT us.user_id, us.expires_at, u.id, u.name, u.email, u.role, u.profile_image_url
       FROM user_sessions us

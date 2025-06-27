@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
       VALUES (${sessionId}, ${userId}, ${expiresAt})
     `
 
-    // Log activity with proper JSON
+    // Log activity with proper ID and JSON
+    const activityId = uuidv4()
     const logDetails = {
       email: email,
       name: name,
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
     }
 
     await sql`
-      INSERT INTO activity_logs (user_id, action, details)
-      VALUES (${userId}, 'register', ${JSON.stringify(logDetails)})
+      INSERT INTO activity_logs (id, user_id, user_name, user_email, action, details)
+      VALUES (${activityId}, ${userId}, ${name}, ${email}, 'register', ${JSON.stringify(logDetails)})
     `
 
     const response = NextResponse.json({
