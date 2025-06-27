@@ -85,6 +85,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         id, 
         name, 
         email, 
+        role,
         profile_image_url,
         created_at,
         updated_at
@@ -109,6 +110,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         profileImage: user.profile_image_url,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
@@ -133,7 +135,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const userId = params.id
-    const { name, email, password } = await request.json()
+    const { name, email, password, role } = await request.json()
+
+    console.log("🔧 Admin updating user:", { userId, name, email, role })
 
     // Validate input
     if (!name?.trim() || name.trim().length < 2) {
@@ -144,13 +148,20 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Valid email is required" }, { status: 400 })
     }
 
+    // Validate role if provided
+    if (role && !["Admin", "Member"].includes(role)) {
+      return NextResponse.json({ error: "Role must be either 'Admin' or 'Member'" }, { status: 400 })
+    }
+
     const sql = neon(process.env.DATABASE_URL)
 
     // Check if user exists
-    const existingUser = await sql`SELECT id, name FROM users WHERE id = ${userId}`
+    const existingUser = await sql`SELECT id, name, role FROM users WHERE id = ${userId}`
     if (existingUser.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
+
+    console.log("🔧 Current user data:", existingUser[0])
 
     // Check if email is taken by another user
     const emailCheck = await sql`
@@ -161,30 +172,49 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const oldName = existingUser[0].name
+    const oldRole = existingUser[0].role
 
-    // Update user (with or without password)
+    // Build update query dynamically
+    let updateQuery = `
+      UPDATE users 
+      SET name = $1, 
+          email = $2,
+          updated_at = NOW()
+    `
+    const queryParams = [name.trim(), email.toLowerCase().trim()]
+    let paramIndex = 3
+
+    // Add password if provided
     if (password && password.trim().length >= 6) {
       const passwordHash = await bcrypt.hash(password.trim(), 12)
-      await sql`
-        UPDATE users 
-        SET name = ${name.trim()}, 
-            email = ${email.toLowerCase().trim()}, 
-            password_hash = ${passwordHash},
-            updated_at = NOW()
-        WHERE id = ${userId}
-      `
-    } else {
-      await sql`
-        UPDATE users 
-        SET name = ${name.trim()}, 
-            email = ${email.toLowerCase().trim()},
-            updated_at = NOW()
-        WHERE id = ${userId}
-      `
+      updateQuery += `, password_hash = $${paramIndex}`
+      queryParams.push(passwordHash)
+      paramIndex++
     }
+
+    // Add role if provided
+    if (role) {
+      updateQuery += `, role = $${paramIndex}`
+      queryParams.push(role)
+      paramIndex++
+    }
+
+    updateQuery += ` WHERE id = $${paramIndex}`
+    queryParams.push(userId)
+
+    console.log("🔧 Update query:", updateQuery)
+    console.log(
+      "🔧 Query params:",
+      queryParams.map((p, i) => (i === 2 && password ? "[PASSWORD_HASH]" : p)),
+    )
+
+    // Execute the update
+    const result = await sql.unsafe(updateQuery, queryParams)
+    console.log("🔧 Update result:", result)
 
     // If name changed, update comments to reflect new name
     if (oldName !== name.trim()) {
+      console.log("🔧 Updating comments for name change:", oldName, "->", name.trim())
       await sql`
         UPDATE comments 
         SET author = ${name.trim()}
@@ -199,7 +229,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       `
     }
 
-    return NextResponse.json({ success: true })
+    // Log role change if it happened
+    if (role && oldRole !== role) {
+      console.log("🔧 Role changed:", oldRole, "->", role)
+    }
+
+    // Verify the update worked by fetching the user again
+    const updatedUser = await sql`SELECT id, name, email, role FROM users WHERE id = ${userId}`
+    console.log("🔧 Updated user data:", updatedUser[0])
+
+    return NextResponse.json({
+      success: true,
+      user: updatedUser[0],
+    })
   } catch (error) {
     console.error("Error updating user:", error)
     return NextResponse.json({ error: "Failed to update user" }, { status: 500 })

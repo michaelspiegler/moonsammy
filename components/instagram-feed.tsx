@@ -1,278 +1,259 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Heart, MessageCircle, UserIcon, Calendar, Tag } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Heart, MessageCircle, Calendar, User, Eye } from "lucide-react"
+import { PhotoModal } from "./photo-modal"
 
 interface Comment {
   id: string
   author: string
   content: string
-  timestamp: string
-  photoId: string
-}
-
-interface Like {
-  id: string
-  author: string
-  timestamp: string
-}
-
-interface PhotoTag {
-  id: string
-  name: string
+  created_at: string
 }
 
 interface Photo {
   id: string
   url: string
-  filename: string
-  uploadedAt: string
   title?: string
+  description?: string
   year?: number
-  tags?: string[]
-  comments?: Comment[]
+  tags?: Array<{ id: string; name: string }> | string[]
   likes?: number
-  uploader?: {
-    name: string
-    profileImage?: string
-  }
-}
-
-interface InstagramFeedUser {
-  id: string
-  name: string
-  email: string
-  profileImage?: string
-  role?: string
+  comments?: Comment[]
+  uploader?: string
+  uploaded_at?: string
 }
 
 interface InstagramFeedProps {
   photos: Photo[]
-  user: InstagramFeedUser | null
-  onAddComment: (photoId: string, content: string) => void
-  onLikePhoto: (photoId: string) => void
+  currentUser?: {
+    name: string
+    email: string
+    role?: string
+  } | null
+  onPhotoUpdate?: () => void
 }
 
-export function InstagramFeed({ photos, user, onAddComment, onLikePhoto }: InstagramFeedProps) {
-  const [commentInputs, setCommentInputs] = useState<{ [key: string]: string }>({})
-  const [submittingComments, setSubmittingComments] = useState<{ [key: string]: boolean }>({})
+export function InstagramFeed({ photos, currentUser, onPhotoUpdate }: InstagramFeedProps) {
+  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null)
+  const [photoStats, setPhotoStats] = useState<Record<string, { likes: number; comments: number; hasLiked: boolean }>>(
+    {},
+  )
 
-  const handleCommentSubmit = async (photoId: string) => {
-    const content = commentInputs[photoId]?.trim()
-    if (!content || !user) return
+  useEffect(() => {
+    // Fetch stats for all photos
+    photos.forEach(fetchPhotoStats)
+  }, [photos])
 
-    setSubmittingComments((prev) => ({ ...prev, [photoId]: true }))
-
+  const fetchPhotoStats = async (photo: Photo) => {
     try {
-      await onAddComment(photoId, content)
-      setCommentInputs((prev) => ({ ...prev, [photoId]: "" }))
+      const response = await fetch(`/api/photos/${photo.id}/metadata`)
+      if (response.ok) {
+        const data = await response.json()
+        setPhotoStats((prev) => ({
+          ...prev,
+          [photo.id]: {
+            likes: data.likes || 0,
+            comments: data.comments?.length || 0,
+            hasLiked: data.hasLiked || false,
+          },
+        }))
+      }
     } catch (error) {
-      console.error("Error adding comment:", error)
-    } finally {
-      setSubmittingComments((prev) => ({ ...prev, [photoId]: false }))
+      console.error("Error fetching photo stats:", error)
     }
   }
 
-  const handleCommentChange = (photoId: string, value: string) => {
-    setCommentInputs((prev) => ({ ...prev, [photoId]: value }))
+  const handleLike = async (photo: Photo, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!currentUser) return
+
+    try {
+      const response = await fetch(`/api/photos/${photo.id}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author: currentUser.name }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setPhotoStats((prev) => ({
+          ...prev,
+          [photo.id]: {
+            ...prev[photo.id],
+            likes: data.likes,
+            hasLiked: data.hasLiked,
+          },
+        }))
+      }
+    } catch (error) {
+      console.error("Error liking photo:", error)
+    }
   }
 
-  const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-    if (diffInSeconds < 60) return "now"
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h`
-    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d`
-    return `${Math.floor(diffInSeconds / 604800)}w`
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
   }
 
-  if (!user) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 mb-4">Please sign in to view the memory feed</p>
-      </div>
-    )
+  const handlePhotoUpdate = () => {
+    if (onPhotoUpdate) {
+      onPhotoUpdate()
+    }
+    // Refresh stats for all photos
+    photos.forEach(fetchPhotoStats)
   }
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Signed-in user status */}
-      <div className="flex items-center space-x-3 p-4 bg-white rounded-lg border mb-6 max-w-md mx-auto">
-        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
-          {user.profileImage ? (
-            <Image
-              src={user.profileImage || "/placeholder.svg"}
-              alt={user.name}
-              width={32}
-              height={32}
-              className="w-full h-full object-cover"
-              unoptimized
-            />
-          ) : (
-            <UserIcon className="h-4 w-4 text-gray-400" />
-          )}
-        </div>
-        <div>
-          <p className="font-medium text-gray-800">{user.name}</p>
-          <p className="text-sm text-gray-500">Viewing memories</p>
-        </div>
+      {/* User Status Bar */}
+      <div className="text-center mb-8">
+        {currentUser ? (
+          <div className="flex items-center justify-center space-x-2 text-gray-600">
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+              <User className="h-4 w-4 text-gray-400" />
+            </div>
+            <span>Welcome back, {currentUser.name}!</span>
+            {currentUser.role === "Admin" && (
+              <Badge variant="destructive" className="text-xs">
+                Admin
+              </Badge>
+            )}
+          </div>
+        ) : (
+          <p className="text-gray-600">Sign in to like and comment on photos</p>
+        )}
       </div>
 
-      {/* Photo Grid - 4 columns */}
-      {photos.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500">No memories to display yet</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {photos.map((photo) => (
-            <Card key={photo.id} className="overflow-hidden">
-              {/* Photo Header */}
-              <div className="flex items-center justify-between p-4 pb-2">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
-                    {photo.uploader?.profileImage ? (
-                      <Image
-                        src={photo.uploader.profileImage || "/placeholder.svg"}
-                        alt={photo.uploader.name || "User"}
-                        width={32}
-                        height={32}
-                        className="w-full h-full object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <UserIcon className="h-4 w-4 text-gray-400" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm text-gray-800">{photo.uploader?.name || "Anonymous"}</p>
-                    <p className="text-xs text-gray-500">{formatTimeAgo(photo.uploadedAt)}</p>
-                  </div>
-                </div>
-                {photo.year && (
-                  <div className="flex items-center space-x-1 text-xs text-gray-500">
-                    <Calendar className="h-3 w-3" />
-                    <span>{photo.year}</span>
-                  </div>
-                )}
-              </div>
+      {/* Photo Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {photos.map((photo) => {
+          const stats = photoStats[photo.id] || { likes: 0, comments: 0, hasLiked: false }
 
-              {/* Photo */}
+          return (
+            <Card
+              key={photo.id}
+              className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group"
+              onClick={() => setSelectedPhoto(photo)}
+            >
               <div className="relative aspect-square">
                 <Image
                   src={photo.url || "/placeholder.svg"}
-                  alt={photo.title || photo.filename}
+                  alt={photo.title || "Photo"}
                   fill
                   className="object-cover"
                   unoptimized
                 />
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-4 text-white">
+                    <div className="flex items-center space-x-1">
+                      <Heart className={`h-5 w-5 ${stats.hasLiked ? "fill-current text-red-500" : ""}`} />
+                      <span className="font-medium">{stats.likes}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <MessageCircle className="h-5 w-5" />
+                      <span className="font-medium">{stats.comments}</span>
+                    </div>
+                    <Eye className="h-5 w-5" />
+                  </div>
+                </div>
               </div>
 
               <CardContent className="p-4">
-                {/* Action Buttons */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="p-0 h-auto hover:bg-transparent"
-                      onClick={() => onLikePhoto(photo.id)}
-                    >
-                      <Heart className="h-5 w-5 text-gray-700 hover:text-red-500" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="p-0 h-auto hover:bg-transparent">
-                      <MessageCircle className="h-5 w-5 text-gray-700" />
-                    </Button>
+                {/* Header */}
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                    <User className="h-4 w-4 text-gray-400" />
                   </div>
-                  {photo.likes && photo.likes > 0 && <p className="text-sm text-gray-600">{photo.likes} likes</p>}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{photo.uploader || "Anonymous"}</p>
+                    {photo.uploaded_at && <p className="text-xs text-gray-500">{formatDate(photo.uploaded_at)}</p>}
+                  </div>
                 </div>
 
                 {/* Title */}
-                {photo.title && (
-                  <div className="mb-2">
-                    <p className="text-sm">
-                      <span className="font-medium text-gray-800">{photo.uploader?.name || "Anonymous"}</span>{" "}
-                      <span className="text-gray-700">{photo.title}</span>
-                    </p>
+                {photo.title && <h3 className="font-semibold text-sm mb-2 line-clamp-2">{photo.title}</h3>}
+
+                {/* Description */}
+                {photo.description && <p className="text-gray-600 text-xs mb-3 line-clamp-2">{photo.description}</p>}
+
+                {/* Year */}
+                {photo.year && (
+                  <div className="flex items-center space-x-1 mb-2">
+                    <Calendar className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-500">{photo.year}</span>
                   </div>
                 )}
 
                 {/* Tags */}
                 {photo.tags && photo.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {photo.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        <Tag className="h-2 w-2 mr-1" />
-                        {typeof tag === "string" ? tag : tag.name}
-                      </Badge>
-                    ))}
+                  <div className="mb-3">
+                    <div className="flex flex-wrap gap-1">
+                      {photo.tags.slice(0, 3).map((tag, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {typeof tag === "string" ? tag : tag.name}
+                        </Badge>
+                      ))}
+                      {photo.tags.length > 3 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{photo.tags.length - 3}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Comments */}
-                {photo.comments && photo.comments.length > 0 && (
-                  <div className="space-y-2 mb-3">
-                    {photo.comments.slice(0, 2).map((comment) => (
-                      <div key={comment.id} className="text-sm">
-                        <span className="font-medium text-gray-800">{comment.author}</span>{" "}
-                        <span className="text-gray-700">{comment.content}</span>
-                      </div>
-                    ))}
-                    {photo.comments.length > 2 && (
-                      <p className="text-sm text-gray-500">View all {photo.comments.length} comments</p>
-                    )}
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <div className="flex items-center space-x-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => handleLike(photo, e)}
+                      disabled={!currentUser}
+                      className={`flex items-center space-x-1 h-8 px-2 ${stats.hasLiked ? "text-red-500" : ""}`}
+                    >
+                      <Heart className={`h-4 w-4 ${stats.hasLiked ? "fill-current" : ""}`} />
+                      <span className="text-xs">{stats.likes}</span>
+                    </Button>
+                    <div className="flex items-center space-x-1 text-gray-500">
+                      <MessageCircle className="h-4 w-4" />
+                      <span className="text-xs">{stats.comments}</span>
+                    </div>
                   </div>
-                )}
-
-                {/* Add Comment */}
-                <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
-                    {user.profileImage ? (
-                      <Image
-                        src={user.profileImage || "/placeholder.svg"}
-                        alt={user.name}
-                        width={24}
-                        height={24}
-                        className="w-full h-full object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <UserIcon className="h-3 w-3 text-gray-400" />
-                    )}
-                  </div>
-                  <div className="flex-1 flex items-center space-x-2">
-                    <Textarea
-                      placeholder="Add a comment..."
-                      value={commentInputs[photo.id] || ""}
-                      onChange={(e) => handleCommentChange(photo.id, e.target.value)}
-                      className="min-h-[32px] resize-none text-sm border-none shadow-none p-0 focus-visible:ring-0"
-                      rows={1}
-                    />
-                    {commentInputs[photo.id]?.trim() && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-blue-600 hover:text-blue-700 p-0 h-auto font-medium"
-                        onClick={() => handleCommentSubmit(photo.id)}
-                        disabled={submittingComments[photo.id]}
-                      >
-                        {submittingComments[photo.id] ? "..." : "Post"}
-                      </Button>
-                    )}
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={() => setSelectedPhoto(photo)}
+                  >
+                    View
+                  </Button>
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+          )
+        })}
+      </div>
+
+      {/* Photo Modal */}
+      {selectedPhoto && (
+        <PhotoModal
+          photo={selectedPhoto}
+          isOpen={!!selectedPhoto}
+          onClose={() => setSelectedPhoto(null)}
+          currentUser={currentUser}
+          onPhotoUpdate={handlePhotoUpdate}
+        />
       )}
     </div>
   )
