@@ -1,134 +1,67 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
-    console.log("🔍 Auth me: Starting auth check...")
+    console.log("🔍 Auth me: Starting auth check")
+
+    const cookies = request.headers.get("cookie")
+    console.log("🔍 Auth me: Cookies received:", cookies ? "present" : "none")
+
+    if (!cookies) {
+      console.log("🔍 Auth me: No cookies found")
+      return NextResponse.json({ user: null }, { status: 200 })
+    }
+
+    const sessionMatch = cookies.match(/session=([^;]+)/)
+    if (!sessionMatch) {
+      console.log("🔍 Auth me: No session cookie found")
+      return NextResponse.json({ user: null }, { status: 200 })
+    }
+
+    const sessionId = sessionMatch[1]
+    console.log("🔍 Auth me: Session ID found:", sessionId.substring(0, 8) + "...")
 
     if (!process.env.DATABASE_URL) {
-      console.log("🔍 Auth me: No database URL")
-      return NextResponse.json({ user: null })
+      console.log("🔍 Auth me: No database URL configured")
+      return NextResponse.json({ user: null }, { status: 200 })
     }
-
-    // Get all possible session sources with better debugging
-    const cookieStore = request.cookies
-    const sessionFromCookie = cookieStore.get("session")?.value
-    const sessionFromAuthCookie = cookieStore.get("auth-session")?.value
-    const sessionFromUserCookie = cookieStore.get("user-session")?.value
-    const sessionFromHeader = request.headers.get("x-session-token")
-
-    console.log("🔍 Auth me: Session sources:")
-    console.log("  - session cookie:", sessionFromCookie ? "EXISTS" : "MISSING")
-    console.log("  - auth-session cookie:", sessionFromAuthCookie ? "EXISTS" : "MISSING")
-    console.log("  - user-session cookie:", sessionFromUserCookie ? "EXISTS" : "MISSING")
-    console.log("  - x-session-token header:", sessionFromHeader ? "EXISTS" : "MISSING")
-
-    const sessionId = sessionFromCookie || sessionFromAuthCookie || sessionFromUserCookie || sessionFromHeader
-
-    if (!sessionId) {
-      console.log("🔍 Auth me: No session ID found from any source")
-      return NextResponse.json({ user: null })
-    }
-
-    console.log("🔍 Auth me: Using session ID:", sessionId.substring(0, 20) + "...")
 
     const sql = neon(process.env.DATABASE_URL)
 
-    // Get user from session including role with error handling
-    let sessions
-    try {
-      sessions = await sql`
-        SELECT u.id, u.name, u.email, u.profile_image_url, u.role, s.expires_at, s.id as session_id
-        FROM user_sessions s
-        JOIN users u ON s.user_id = u.id
-        WHERE s.id = ${sessionId}
-        LIMIT 1
-      `
-    } catch (dbError) {
-      console.error("🔍 Auth me: Database query failed:", dbError)
-      return NextResponse.json({ user: null })
-    }
+    // Check if session exists and is valid
+    const sessions = await sql`
+      SELECT s.*, u.id as user_id, u.name, u.email, u.role, u.profile_image
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = ${sessionId} AND s.expires_at > NOW()
+    `
 
-    console.log("🔍 Auth me: Database query returned:", sessions.length, "sessions")
+    console.log("🔍 Auth me: Session query result:", sessions.length > 0 ? "found" : "not found")
 
     if (sessions.length === 0) {
-      console.log("🔍 Auth me: Session not found in database")
-      return NextResponse.json({ user: null })
+      console.log("🔍 Auth me: Session not found or expired")
+      return NextResponse.json({ user: null }, { status: 200 })
     }
 
     const session = sessions[0]
-    const now = new Date()
-    const expiresAt = new Date(session.expires_at)
+    console.log("🔍 Auth me: User authenticated:", session.name, "Role:", session.role)
 
-    console.log("🔍 Auth me: Session details:")
-    console.log("  - User:", session.name)
-    console.log("  - Role:", session.role)
-    console.log("  - Expires:", expiresAt.toISOString())
-    console.log("  - Current:", now.toISOString())
-    console.log("  - Valid:", expiresAt > now)
-
-    if (expiresAt <= now) {
-      console.log("🔍 Auth me: Session expired, cleaning up")
-      try {
-        await sql`DELETE FROM user_sessions WHERE id = ${sessionId}`
-      } catch (cleanupError) {
-        console.error("🔍 Auth me: Failed to cleanup expired session:", cleanupError)
-      }
-      return NextResponse.json({ user: null })
-    }
-
-    // Extend session if it's close to expiring
-    const timeUntilExpiry = expiresAt.getTime() - now.getTime()
-    const oneDayInMs = 24 * 60 * 60 * 1000
-
-    if (timeUntilExpiry < oneDayInMs) {
-      console.log("🔍 Auth me: Extending session expiry")
-      try {
-        const newExpiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-        await sql`
-          UPDATE user_sessions 
-          SET expires_at = ${newExpiryDate.toISOString()}
-          WHERE id = ${sessionId}
-        `
-      } catch (extendError) {
-        console.error("🔍 Auth me: Failed to extend session:", extendError)
-      }
-    }
-
-    console.log("🔍 Auth me: Valid session found - returning user data")
-
-    // Return user data including role AND session token
-    const userData = {
-      user: {
-        id: session.id,
-        name: session.name,
-        email: session.email,
-        role: session.role || "Member",
-        profileImage: session.profile_image_url,
-        sessionToken: sessionId,
+    return NextResponse.json(
+      {
+        user: {
+          id: session.user_id,
+          name: session.name,
+          email: session.email,
+          role: session.role,
+          profileImage: session.profile_image,
+        },
       },
-    }
-
-    const response = NextResponse.json(userData)
-
-    // Set cookies with proper options
-    const cookieOptions = {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-    }
-
-    // Set multiple cookie names for redundancy
-    response.cookies.set("session", sessionId, cookieOptions)
-    response.cookies.set("auth-session", sessionId, cookieOptions)
-    response.cookies.set("user-session", sessionId, cookieOptions)
-
-    console.log("🔍 Auth me: Set cookies and returning user data with role:", session.role)
-    return response
+      { status: 200 },
+    )
   } catch (error) {
     console.error("🔍 Auth me: Error during auth check:", error)
-    return NextResponse.json({ user: null }, { status: 200 }) // Always return 200 to avoid JSON parsing issues
+    // Always return 200 to prevent JSON parsing issues
+    return NextResponse.json({ user: null }, { status: 200 })
   }
 }
